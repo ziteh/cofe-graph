@@ -5,16 +5,23 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
 pub struct FunctionNode {
+    /// Fully qualified function name
     pub name: String,
+    /// Path to the source file where the function is defined
     pub file: PathBuf,
+    /// Line number of the function definition
     pub line: u32,
+    /// Raw source code of the function
     pub source: String,
 }
 
 #[derive(Default, Serialize, Deserialize)]
 pub struct CallGraph {
+    /// All function nodes, keyed by function name
     pub nodes: HashMap<String, FunctionNode>,
+    /// Reverse index: key is the callee, value is the set of functions that call it
     pub callers: HashMap<String, HashSet<String>>,
+    /// Forward index: key is the caller, value is the set of functions it calls
     pub callees: HashMap<String, HashSet<String>>,
 }
 
