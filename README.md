@@ -19,7 +19,18 @@ A GraphRAG MCP server for C language.
 
 ## Usage
 
-todo...
+`.mcp.json`
+
+```json
+{
+  "mcpServers": {
+    "cofe-graph": {
+      "type": "stdio",
+      "command": "/path/to/cofe-graph"
+    }
+  }
+}
+```
 
 ## Development
 
