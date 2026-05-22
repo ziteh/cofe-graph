@@ -1,3 +1,4 @@
+mod cache;
 mod graph;
 mod parser;
 
@@ -14,6 +15,7 @@ use serde::Deserialize;
 use tokio::sync::RwLock;
 use walkdir::WalkDir;
 
+use cache::Cache;
 use graph::CallGraph;
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
@@ -63,6 +65,21 @@ impl CofeGraph {
             return format!("error: '{}' is not a directory", path);
         }
 
+        let cache = Cache::open(base);
+
+        if let Some(ref c) = cache {
+            if let Some(cached) = c.load() {
+                let fn_count = cached.nodes.len();
+                let edge_count: usize = cached.callees.values().map(|s| s.len()).sum();
+                *self.graph.write().await = cached;
+                c.record_hit();
+                return format!(
+                    "Loaded from cache (commit {}). Found {fn_count} functions and {edge_count} call edges.",
+                    c.commit_hash
+                );
+            }
+        }
+
         let mut graph = self.graph.write().await;
         graph.clear();
 
@@ -90,10 +107,15 @@ impl CofeGraph {
             }
         }
 
+        if let Some(ref c) = cache {
+            c.save(&graph);
+        }
+
         let fn_count = graph.nodes.len();
         let edge_count: usize = graph.callees.values().map(|s| s.len()).sum();
+        let cache_note = if cache.is_some() { " (cached)" } else { "" };
         format!(
-            "Indexed {files_ok} files ({files_err} errors). Found {fn_count} functions and {edge_count} call edges."
+            "Indexed {files_ok} files ({files_err} errors). Found {fn_count} functions and {edge_count} call edges.{cache_note}"
         )
     }
 

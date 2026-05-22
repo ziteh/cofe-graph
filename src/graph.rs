@@ -1,6 +1,9 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::PathBuf;
 
+use serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize)]
 pub struct FunctionNode {
     pub name: String,
     pub file: PathBuf,
@@ -8,7 +11,7 @@ pub struct FunctionNode {
     pub source: String,
 }
 
-#[derive(Default)]
+#[derive(Default, Serialize, Deserialize)]
 pub struct CallGraph {
     pub nodes: HashMap<String, FunctionNode>,
     pub callers: HashMap<String, HashSet<String>>,
