@@ -106,6 +106,7 @@ impl CofeGraph {
 
         let mut files_ok = 0usize;
         let mut files_err = 0usize;
+        let mut sources: Vec<String> = Vec::new();
 
         for entry in WalkDir::new(base).into_iter().filter_map(|e| e.ok()) {
             let p = entry.path();
@@ -115,7 +116,10 @@ impl CofeGraph {
             }
             match std::fs::read_to_string(p) {
                 Ok(src) => match crate::parser::parse_file(p, &src, &mut graph) {
-                    Ok(_) => files_ok += 1,
+                    Ok(_) => {
+                        files_ok += 1;
+                        sources.push(src);
+                    }
                     Err(e) => {
                         eprintln!("[cofe-graph] parse error {:?}: {e}", p);
                         files_err += 1;
@@ -125,6 +129,13 @@ impl CofeGraph {
                     eprintln!("[cofe-graph] read error {:?}: {e}", p);
                     files_err += 1;
                 }
+            }
+        }
+
+        // Pass 3: scan macro refs after all function definitions are known
+        for src in &sources {
+            if let Err(e) = crate::parser::scan_macro_refs(src, &mut graph) {
+                eprintln!("[cofe-graph] macro scan error: {e}");
             }
         }
 
@@ -200,18 +211,83 @@ impl CofeGraph {
         }
     }
 
-    #[tool(description = "List functions that are never called (potential dead code)")]
+    #[tool(
+        description = "List functions that are never called (potential dead code), classified by likely reason"
+    )]
     async fn find_dead_code(&self) -> String {
         let graph = self.graph.read().await;
         let mut dead = graph.find_dead_code();
-        dead.sort_by_key(|n| &n.name);
+        dead.sort_by_key(|(n, _)| &n.name);
         if dead.is_empty() {
             return "No dead code found (all functions have at least one caller)".to_string();
         }
-        dead.iter()
-            .map(|n| format!("{} @ {}:{}", n.name, n.file.display(), n.line))
-            .collect::<Vec<_>>()
-            .join("\n")
+
+        use crate::graph::DeadCodeKind;
+        let true_dead: Vec<_> = dead
+            .iter()
+            .filter(|(_, k)| *k == DeadCodeKind::Suspicious)
+            .collect();
+        let macro_reg: Vec<_> = dead
+            .iter()
+            .filter(|(_, k)| *k == DeadCodeKind::MacroRegistered)
+            .collect();
+        let cb_name: Vec<_> = dead
+            .iter()
+            .filter(|(_, k)| *k == DeadCodeKind::CallbackByName)
+            .collect();
+        let entry: Vec<_> = dead
+            .iter()
+            .filter(|(_, k)| *k == DeadCodeKind::Entrypoint)
+            .collect();
+
+        let fmt = |(n, k): &&(&crate::graph::FunctionNode, DeadCodeKind)| {
+            format!(
+                "[{}] {} @ {}:{}",
+                k.as_str(),
+                n.name,
+                n.file.display(),
+                n.line
+            )
+        };
+
+        let mut sections: Vec<String> = Vec::new();
+
+        if !true_dead.is_empty() {
+            let lines: Vec<_> = true_dead.iter().map(fmt).collect();
+            sections.push(format!(
+                "=== Suspicious (no evidence of use) ({}) ===\n{}",
+                true_dead.len(),
+                lines.join("\n")
+            ));
+        } else {
+            sections.push("=== Suspicious (no evidence of use) (0) ===\n(none)".to_string());
+        }
+        if !macro_reg.is_empty() {
+            let lines: Vec<_> = macro_reg.iter().map(fmt).collect();
+            sections.push(format!(
+                "=== Registered via macro ({}) ===\n{}",
+                macro_reg.len(),
+                lines.join("\n")
+            ));
+        }
+        if !cb_name.is_empty() {
+            let lines: Vec<_> = cb_name.iter().map(fmt).collect();
+            sections.push(format!(
+                "=== Likely callbacks by name ({}) ===\n{}",
+                cb_name.len(),
+                lines.join("\n")
+            ));
+        }
+        if !entry.is_empty() {
+            let lines: Vec<_> = entry.iter().map(fmt).collect();
+            sections.push(format!(
+                "=== Entrypoints ({}) ===\n{}",
+                entry.len(),
+                lines.join("\n")
+            ));
+        }
+
+        sections.join("\n\n")
     }
 
     #[tool(
@@ -221,10 +297,12 @@ impl CofeGraph {
         let graph = self.graph.read().await;
         let fn_count = graph.nodes.len();
         let edge_count: usize = graph.callees.values().map(|s| s.len()).sum();
-        let dead_count = graph
-            .nodes
-            .keys()
-            .filter(|name| graph.callers.get(*name).map_or(true, |s| s.is_empty()))
+        use crate::graph::DeadCodeKind;
+        let dead = graph.find_dead_code();
+        let dead_count = dead.len();
+        let true_dead_count = dead
+            .iter()
+            .filter(|(_, k)| *k == DeadCodeKind::Suspicious)
             .count();
 
         let top_fan_in = graph.top_by_fan_in(5);
@@ -240,7 +318,7 @@ impl CofeGraph {
             .collect();
 
         format!(
-            "Functions : {fn_count}\nCall edges: {edge_count}\nDead code : {dead_count} (no callers)\n\nTop fan-in (most callers):\n{}\n\nTop fan-out (most callees):\n{}",
+            "Functions : {fn_count}\nCall edges: {edge_count}\nDead code : {dead_count} (no callers, {true_dead_count} true dead)\n\nTop fan-in (most callers):\n{}\n\nTop fan-out (most callees):\n{}",
             fan_in_lines.join("\n"),
             fan_out_lines.join("\n"),
         )

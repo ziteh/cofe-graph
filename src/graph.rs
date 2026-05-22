@@ -3,6 +3,29 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub enum DeadCodeKind {
+    /// Appears as an argument to a macro call (e.g. NRF_SDH_BLE_OBSERVER(..., my_handler, ...))
+    MacroRegistered,
+    /// Name matches common callback/handler naming conventions
+    CallbackByName,
+    /// Known entrypoint (main, etc.)
+    Entrypoint,
+    /// No evidence of use — genuinely suspicious
+    Suspicious,
+}
+
+impl DeadCodeKind {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            DeadCodeKind::MacroRegistered => "macro_registered",
+            DeadCodeKind::CallbackByName => "callback_by_name",
+            DeadCodeKind::Entrypoint => "entrypoint",
+            DeadCodeKind::Suspicious => "suspicious",
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct FunctionNode {
     /// Fully qualified function name
@@ -23,6 +46,8 @@ pub struct CallGraph {
     pub callers: HashMap<String, HashSet<String>>,
     /// Forward index: key is the caller, value is the set of functions it calls
     pub callees: HashMap<String, HashSet<String>>,
+    /// Functions that appear as arguments to macro calls (UPPER_CASE identifiers)
+    pub macro_referenced: HashSet<String>,
 }
 
 impl CallGraph {
@@ -45,6 +70,7 @@ impl CallGraph {
         self.nodes.clear();
         self.callers.clear();
         self.callees.clear();
+        self.macro_referenced.clear();
     }
 
     pub fn get_callers(&self, name: &str, depth: usize) -> Vec<String> {
@@ -127,11 +153,41 @@ impl CallGraph {
         None
     }
 
-    /// Returns all functions that have no callers (potential dead code).
-    pub fn find_dead_code(&self) -> Vec<&FunctionNode> {
+    fn classify_dead(&self, name: &str) -> DeadCodeKind {
+        if name == "main" {
+            return DeadCodeKind::Entrypoint;
+        }
+        if self.macro_referenced.contains(name) {
+            return DeadCodeKind::MacroRegistered;
+        }
+        let lower = name.to_lowercase();
+        let suffixes = [
+            "_handler",
+            "_callback",
+            "_cb",
+            "_isr",
+            "_irq",
+            "_evt",
+            "_event",
+        ];
+        let prefixes = ["on_", "assert_"];
+        if suffixes.iter().any(|s| lower.ends_with(s))
+            || prefixes.iter().any(|p| lower.starts_with(p))
+        {
+            return DeadCodeKind::CallbackByName;
+        }
+        DeadCodeKind::Suspicious
+    }
+
+    /// Returns all functions that have no callers, with a classification of why.
+    pub fn find_dead_code(&self) -> Vec<(&FunctionNode, DeadCodeKind)> {
         self.nodes
             .values()
             .filter(|n| self.callers.get(&n.name).map_or(true, |s| s.is_empty()))
+            .map(|n| {
+                let kind = self.classify_dead(&n.name);
+                (n, kind)
+            })
             .collect()
     }
 
