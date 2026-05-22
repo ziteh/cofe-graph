@@ -4,12 +4,15 @@ A GraphRAG MCP server for C language.
 
 ## Tools
 
-| Tool            | Description                                                       |
-| --------------- | ----------------------------------------------------------------- |
-| `index_project` | Parse all `.c`/`.h` files in a directory and build the call graph |
-| `find_function` | Case-insensitive substring search for functions                   |
-| `get_callers`   | BFS upward — who calls this function?                             |
-| `get_callees`   | BFS downward — what does this function call?                      |
+| Tool              | Description                                                       |
+| ----------------- | ----------------------------------------------------------------- |
+| `index_project`   | Parse all `.c`/`.h` files in a directory and build the call graph |
+| `find_function`   | Case-insensitive substring search for functions                   |
+| `get_callers`     | BFS upward — who calls this function?                             |
+| `get_callees`     | BFS downward — what does this function call?                      |
+| `get_source`      | Return the raw source code of a function by exact name            |
+| `get_path`        | Find the shortest call path between two functions                 |
+| `find_dead_code`  | List functions that are never called (potential dead code)        |
 
 ## Usage
 

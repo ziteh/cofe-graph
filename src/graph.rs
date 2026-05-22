@@ -91,4 +91,47 @@ impl CallGraph {
             .filter(|n| n.name.to_lowercase().contains(&q))
             .collect()
     }
+
+    /// BFS from `from` through callees; returns the shortest call path to `to`, or None.
+    pub fn find_path(&self, from: &str, to: &str) -> Option<Vec<String>> {
+        if from == to {
+            return Some(vec![from.to_string()]);
+        }
+        let mut visited = HashSet::new();
+        let mut queue = VecDeque::new();
+        let mut parent: HashMap<String, String> = HashMap::new();
+
+        visited.insert(from.to_string());
+        queue.push_back(from.to_string());
+
+        while let Some(current) = queue.pop_front() {
+            if let Some(callees) = self.callees.get(&current) {
+                for callee in callees {
+                    if visited.insert(callee.clone()) {
+                        parent.insert(callee.clone(), current.clone());
+                        if callee == to {
+                            let mut path = vec![to.to_string()];
+                            let mut node = to.to_string();
+                            while let Some(p) = parent.get(&node) {
+                                path.push(p.clone());
+                                node = p.clone();
+                            }
+                            path.reverse();
+                            return Some(path);
+                        }
+                        queue.push_back(callee.clone());
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    /// Returns all functions that have no callers (potential dead code).
+    pub fn find_dead_code(&self) -> Vec<&FunctionNode> {
+        self.nodes
+            .values()
+            .filter(|n| self.callers.get(&n.name).map_or(true, |s| s.is_empty()))
+            .collect()
+    }
 }

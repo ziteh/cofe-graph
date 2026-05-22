@@ -33,6 +33,20 @@ pub struct TraverseParams {
     pub depth: Option<u32>,
 }
 
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct GetSourceParams {
+    #[schemars(description = "Exact function name")]
+    pub name: String,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct GetPathParams {
+    #[schemars(description = "Starting function name")]
+    pub from: String,
+    #[schemars(description = "Target function name")]
+    pub to: String,
+}
+
 #[derive(Clone)]
 pub struct CofeGraph {
     graph: Arc<RwLock<CallGraph>>,
@@ -153,12 +167,46 @@ impl CofeGraph {
         }
         callees.join("\n")
     }
+
+    #[tool(description = "Get the source code of a function by exact name")]
+    async fn get_source(&self, params: Parameters<GetSourceParams>) -> String {
+        let Parameters(GetSourceParams { name }) = params;
+        let graph = self.graph.read().await;
+        match graph.nodes.get(&name) {
+            Some(n) => format!("// {}:{}\n{}", n.file.display(), n.line, n.source),
+            None => format!("Function '{name}' not found"),
+        }
+    }
+
+    #[tool(description = "Find the shortest call path from one function to another")]
+    async fn get_path(&self, params: Parameters<GetPathParams>) -> String {
+        let Parameters(GetPathParams { from, to }) = params;
+        let graph = self.graph.read().await;
+        match graph.find_path(&from, &to) {
+            Some(path) => path.join(" -> "),
+            None => format!("No call path from '{from}' to '{to}'"),
+        }
+    }
+
+    #[tool(description = "List functions that are never called (potential dead code)")]
+    async fn find_dead_code(&self) -> String {
+        let graph = self.graph.read().await;
+        let mut dead = graph.find_dead_code();
+        dead.sort_by_key(|n| &n.name);
+        if dead.is_empty() {
+            return "No dead code found (all functions have at least one caller)".to_string();
+        }
+        dead.iter()
+            .map(|n| format!("{} @ {}:{}", n.name, n.file.display(), n.line))
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
 }
 
 #[tool_handler(router = self.tool_router)]
 impl ServerHandler for CofeGraph {
     fn get_info(&self) -> ServerInfo {
         ServerInfo::new(ServerCapabilities::builder().enable_tools().build())
-            .with_instructions("GraphRAG tools for C code analysis. Call index_project first, then use find_function / get_callers / get_callees.")
+            .with_instructions("GraphRAG tools for C code analysis. Call index_project first, then use find_function / get_callers / get_callees / get_source / get_path / find_dead_code.")
     }
 }
