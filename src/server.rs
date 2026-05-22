@@ -47,6 +47,18 @@ pub struct GetPathParams {
     pub to: String,
 }
 
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct FindInFileParams {
+    #[schemars(description = "Filename substring to match against file paths (case-insensitive)")]
+    pub filename: String,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct TopNParams {
+    #[schemars(description = "Number of results to return (default: 10)")]
+    pub top_n: Option<u32>,
+}
+
 #[derive(Clone)]
 pub struct CofeGraph {
     graph: Arc<RwLock<CallGraph>>,
@@ -201,12 +213,87 @@ impl CofeGraph {
             .collect::<Vec<_>>()
             .join("\n")
     }
+
+    #[tool(
+        description = "Show overall call graph statistics: function count, edge count, and top fan-in/fan-out functions"
+    )]
+    async fn get_stats(&self) -> String {
+        let graph = self.graph.read().await;
+        let fn_count = graph.nodes.len();
+        let edge_count: usize = graph.callees.values().map(|s| s.len()).sum();
+        let dead_count = graph
+            .nodes
+            .keys()
+            .filter(|name| graph.callers.get(*name).map_or(true, |s| s.is_empty()))
+            .count();
+
+        let top_fan_in = graph.top_by_fan_in(5);
+        let top_fan_out = graph.top_by_fan_out(5);
+
+        let fan_in_lines: Vec<String> = top_fan_in
+            .iter()
+            .map(|(name, count)| format!("  {name} ({count} callers)"))
+            .collect();
+        let fan_out_lines: Vec<String> = top_fan_out
+            .iter()
+            .map(|(name, count)| format!("  {name} ({count} callees)"))
+            .collect();
+
+        format!(
+            "Functions : {fn_count}\nCall edges: {edge_count}\nDead code : {dead_count} (no callers)\n\nTop fan-in (most callers):\n{}\n\nTop fan-out (most callees):\n{}",
+            fan_in_lines.join("\n"),
+            fan_out_lines.join("\n"),
+        )
+    }
+
+    #[tool(
+        description = "List all functions defined in files matching a filename substring (case-insensitive)"
+    )]
+    async fn find_functions_in_file(&self, params: Parameters<FindInFileParams>) -> String {
+        let Parameters(FindInFileParams { filename }) = params;
+        let graph = self.graph.read().await;
+        let mut results: Vec<String> = graph
+            .find_functions_in_file(&filename)
+            .into_iter()
+            .map(|n| format!("{} @ {}:{}", n.name, n.file.display(), n.line))
+            .collect();
+        results.sort();
+        if results.is_empty() {
+            return format!("No functions found in files matching '{filename}'");
+        }
+        results.join("\n")
+    }
+
+    #[tool(
+        description = "List the top N functions by fan-in (most callers) — these are shared utilities or hotspots"
+    )]
+    async fn find_high_fan_in(&self, params: Parameters<TopNParams>) -> String {
+        let Parameters(TopNParams { top_n }) = params;
+        let n = top_n.unwrap_or(10) as usize;
+        let graph = self.graph.read().await;
+        let ranked = graph.top_by_fan_in(n);
+        if ranked.is_empty() {
+            return "No functions in graph".to_string();
+        }
+        ranked
+            .iter()
+            .enumerate()
+            .map(|(i, (name, count))| {
+                let node = graph.nodes.get(*name);
+                let loc = node.map_or(String::new(), |nd| {
+                    format!(" @ {}:{}", nd.file.display(), nd.line)
+                });
+                format!("{}. {name}{loc} — {count} callers", i + 1)
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
 }
 
 #[tool_handler(router = self.tool_router)]
 impl ServerHandler for CofeGraph {
     fn get_info(&self) -> ServerInfo {
         ServerInfo::new(ServerCapabilities::builder().enable_tools().build())
-            .with_instructions("GraphRAG tools for C code analysis. Call index_project first, then use find_function / get_callers / get_callees / get_source / get_path / find_dead_code.")
+            .with_instructions("GraphRAG tools for C code analysis. Call index_project first, then use: find_function / get_callers / get_callees / get_source / get_path / find_dead_code / get_stats / find_functions_in_file / find_high_fan_in.")
     }
 }

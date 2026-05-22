@@ -134,4 +134,43 @@ impl CallGraph {
             .filter(|n| self.callers.get(&n.name).map_or(true, |s| s.is_empty()))
             .collect()
     }
+
+    /// Returns all functions defined in files whose path contains `filename`.
+    pub fn find_functions_in_file<'a>(&'a self, filename: &str) -> Vec<&'a FunctionNode> {
+        let q = filename.to_lowercase();
+        self.nodes
+            .values()
+            .filter(|n| n.file.to_string_lossy().to_lowercase().contains(&q))
+            .collect()
+    }
+
+    /// Returns the top `n` functions by fan-in (number of distinct callers).
+    pub fn top_by_fan_in(&self, n: usize) -> Vec<(&str, usize)> {
+        let mut ranked: Vec<(&str, usize)> = self
+            .nodes
+            .keys()
+            .map(|name| {
+                let count = self.callers.get(name).map_or(0, |s| s.len());
+                (name.as_str(), count)
+            })
+            .collect();
+        ranked.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(b.0)));
+        ranked.truncate(n);
+        ranked
+    }
+
+    /// Returns the top `n` functions by fan-out (number of distinct callees).
+    pub fn top_by_fan_out(&self, n: usize) -> Vec<(&str, usize)> {
+        let mut ranked: Vec<(&str, usize)> = self
+            .nodes
+            .keys()
+            .map(|name| {
+                let count = self.callees.get(name).map_or(0, |s| s.len());
+                (name.as_str(), count)
+            })
+            .collect();
+        ranked.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(b.0)));
+        ranked.truncate(n);
+        ranked
+    }
 }
