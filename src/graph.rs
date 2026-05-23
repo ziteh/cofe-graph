@@ -36,6 +36,8 @@ pub struct FunctionNode {
     pub line: u32,
     /// Raw source code of the function
     pub source: String,
+    /// true if the function has `static` storage class (file-private)
+    pub is_static: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -345,6 +347,15 @@ impl CallGraph {
         self.nodes
             .values()
             .filter(|n| n.file.to_string_lossy().to_lowercase().contains(&q))
+            .collect()
+    }
+
+    /// Returns non-static functions in files matching `filename` — the public API surface.
+    pub fn get_public_api<'a>(&'a self, filename: &str) -> Vec<&'a FunctionNode> {
+        let q = filename.to_lowercase();
+        self.nodes
+            .values()
+            .filter(|n| !n.is_static && n.file.to_string_lossy().to_lowercase().contains(&q))
             .collect()
     }
 

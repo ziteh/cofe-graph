@@ -196,7 +196,7 @@ impl CofeGraph {
         let mut matches: Vec<String> = graph
             .find_function(&name)
             .into_iter()
-            .map(|n| format!("{} @ {}:{}", n.name, n.file.display(), n.line))
+            .map(|n| fmt_fn(n))
             .collect();
         matches.sort();
         if matches.is_empty() {
@@ -234,7 +234,10 @@ impl CofeGraph {
         let Parameters(GetSourceParams { name }) = params;
         let graph = self.graph.read().await;
         match graph.nodes.get(&name) {
-            Some(n) => format!("// {}:{}\n{}", n.file.display(), n.line, n.source),
+            Some(n) => {
+                let vis = if n.is_static { " [static]" } else { "" };
+                format!("// {}:{}{}\n{}", n.file.display(), n.line, vis, n.source)
+            }
             None => format!("Function '{name}' not found"),
         }
     }
@@ -371,11 +374,31 @@ impl CofeGraph {
         let mut results: Vec<String> = graph
             .find_functions_in_file(&filename)
             .into_iter()
-            .map(|n| format!("{} @ {}:{}", n.name, n.file.display(), n.line))
+            .map(|n| fmt_fn(n))
             .collect();
         results.sort();
         if results.is_empty() {
             return format!("No functions found in files matching '{filename}'");
+        }
+        results.join("\n")
+    }
+
+    #[tool(
+        description = "List non-static (public) functions in files matching a filename substring — shows the API surface of a module"
+    )]
+    async fn get_public_api(&self, params: Parameters<FindInFileParams>) -> String {
+        let Parameters(FindInFileParams { filename }) = params;
+        let graph = self.graph.read().await;
+        let mut results: Vec<String> = graph
+            .get_public_api(&filename)
+            .into_iter()
+            .map(|n| fmt_fn(n))
+            .collect();
+        results.sort();
+        if results.is_empty() {
+            return format!(
+                "No public (non-static) functions found in files matching '{filename}'"
+            );
         }
         results.join("\n")
     }
@@ -533,6 +556,11 @@ impl CofeGraph {
             .collect::<Vec<_>>()
             .join("\n")
     }
+}
+
+fn fmt_fn(n: &crate::graph::FunctionNode) -> String {
+    let vis = if n.is_static { " [static]" } else { "" };
+    format!("{}{} @ {}:{}", n.name, vis, n.file.display(), n.line)
 }
 
 #[tool_handler(router = self.tool_router)]

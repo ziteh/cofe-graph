@@ -112,11 +112,16 @@ pub fn parse_file(path: &Path, source: &str, graph: &mut CallGraph) -> Result<()
                 let name = nn.utf8_text(source.as_bytes())?.to_string();
                 let src = dn.utf8_text(source.as_bytes())?.to_string();
                 let line = nn.start_position().row as u32 + 1;
+                let is_static = dn.children(&mut dn.walk()).any(|child| {
+                    child.kind() == "storage_class_specifier"
+                        && child.utf8_text(source.as_bytes()).ok() == Some("static")
+                });
                 graph.insert_node(FunctionNode {
                     name,
                     file: path.to_path_buf(),
                     line,
                     source: src,
+                    is_static,
                 });
             }
         }
