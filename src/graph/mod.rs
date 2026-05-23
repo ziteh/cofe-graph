@@ -280,7 +280,7 @@ impl CallGraph {
     pub fn find_dead_code(&self) -> Vec<(&FunctionNode, DeadCodeKind)> {
         self.nodes
             .values()
-            .filter(|n| self.callers.get(&n.name).map_or(true, |s| s.is_empty()))
+            .filter(|n| self.callers.get(&n.name).is_none_or(|s| s.is_empty()))
             .map(|n| {
                 let kind = self.classify_dead(&n.name);
                 (n, kind)

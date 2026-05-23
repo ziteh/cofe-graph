@@ -19,7 +19,10 @@ async fn test_find_dead_code() {
     let result = find_dead_code(&graph);
     let v: Value = serde_json::from_str(&result).unwrap();
     assert_eq!(v["isError"], false);
-    assert!(v["content"].get("summary").is_some(), "Should contain summary");
+    assert!(
+        v["content"].get("summary").is_some(),
+        "Should contain summary"
+    );
 }
 
 #[tokio::test]

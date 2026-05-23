@@ -42,12 +42,12 @@ pub fn scan_macro_refs(source: &str, graph: &mut CallGraph) -> Result<()> {
             .find(|c| c.index == name_idx)
             .and_then(|c| c.node.utf8_text(source.as_bytes()).ok());
 
-        if macro_name.map_or(false, is_macro_name) {
+        if macro_name.is_some_and(is_macro_name) {
             for cap in m.captures.iter().filter(|c| c.index == arg_idx) {
-                if let Ok(arg) = cap.node.utf8_text(source.as_bytes()) {
-                    if graph.nodes.contains_key(arg) {
-                        graph.macro_referenced.insert(arg.to_string());
-                    }
+                if let Ok(arg) = cap.node.utf8_text(source.as_bytes())
+                    && graph.nodes.contains_key(arg)
+                {
+                    graph.macro_referenced.insert(arg.to_string());
                 }
             }
         }

@@ -32,12 +32,11 @@ pub(super) fn extract_conditions(node: tree_sitter::Node<'_>, src: &[u8]) -> Vec
     let mut curr = node.parent();
     while let Some(p) = curr {
         let kind = p.kind();
-        if kind.starts_with("preproc_if") || kind == "preproc_else" || kind == "preproc_elif" {
-            if let Ok(text) = p.utf8_text(src) {
-                if let Some(first_line) = text.lines().next() {
-                    conditions.push(first_line.trim().to_string());
-                }
-            }
+        if (kind.starts_with("preproc_if") || kind == "preproc_else" || kind == "preproc_elif")
+            && let Ok(text) = p.utf8_text(src)
+            && let Some(first_line) = text.lines().next()
+        {
+            conditions.push(first_line.trim().to_string());
         }
         curr = p.parent();
     }

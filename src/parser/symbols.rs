@@ -42,7 +42,7 @@ pub fn parse_symbols(
         let mut cursor = QueryCursor::new();
         let mut matches = cursor.matches(&q, root, src);
         while let Some(m) = matches.next() {
-            if let Some(name) = cap_text(&m, name_idx, src) {
+            if let Some(name) = cap_text(m, name_idx, src) {
                 let name_node = m
                     .captures
                     .iter()
@@ -53,7 +53,7 @@ pub fn parse_symbols(
                     name,
                     kind: SymbolKind::Define,
                     conditions: crate::parser::utils::extract_conditions(name_node, src),
-                    value: cap_text_opt(&m, val_idx, src).map(trim_value),
+                    value: cap_text_opt(m, val_idx, src).map(trim_value),
                     file: path.to_path_buf(),
                     line: m
                         .captures
@@ -74,9 +74,9 @@ pub fn parse_symbols(
         let mut cursor = QueryCursor::new();
         let mut matches = cursor.matches(&q, root, src);
         while let Some(m) = matches.next() {
-            if let Some(name) = cap_text(&m, name_idx, src) {
-                let params = cap_text_opt(&m, params_idx, src);
-                let value = cap_text_opt(&m, val_idx, src);
+            if let Some(name) = cap_text(m, name_idx, src) {
+                let params = cap_text_opt(m, params_idx, src);
+                let value = cap_text_opt(m, val_idx, src);
                 let display = match (params, value) {
                     (Some(p), Some(v)) => Some(format!("{p} {}", trim_value(v))),
                     (Some(p), None) => Some(p),
@@ -113,7 +113,7 @@ pub fn parse_symbols(
         let mut cursor = QueryCursor::new();
         let mut matches = cursor.matches(&q, root, src);
         while let Some(m) = matches.next() {
-            if let Some(name) = cap_text(&m, name_idx, src) {
+            if let Some(name) = cap_text(m, name_idx, src) {
                 let name_node = m
                     .captures
                     .iter()
@@ -124,7 +124,7 @@ pub fn parse_symbols(
                     name,
                     kind: SymbolKind::EnumValue,
                     conditions: crate::parser::utils::extract_conditions(name_node, src),
-                    value: cap_text_opt(&m, val_idx, src).map(|v| v.trim().to_string()),
+                    value: cap_text_opt(m, val_idx, src).map(|v| v.trim().to_string()),
                     file: path.to_path_buf(),
                     line: m
                         .captures
