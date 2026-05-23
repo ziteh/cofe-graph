@@ -1,5 +1,5 @@
 use crate::graph::{
-    CallGraph, FunctionNode, IncludeEdge, SymbolKind, SymbolNode, TypeKind, TypeNode,
+    CallGraph, FunctionNode, GlobalVar, IncludeEdge, SymbolKind, SymbolNode, TypeKind, TypeNode,
 };
 use anyhow::Result;
 use std::path::Path;
@@ -62,6 +62,11 @@ const ENUM_TYPE_QUERY: &str = r#"
 const TYPEDEF_QUERY: &str = r#"
 (type_definition
   declarator: (type_identifier) @name) @def
+"#;
+
+// Top-level declarations (variable declarations, not function prototypes)
+const GLOBAL_DECL_QUERY: &str = r#"
+(translation_unit (declaration) @decl)
 "#;
 
 const MACRO_ARG_QUERY: &str = r#"
@@ -190,7 +195,99 @@ pub fn parse_file(path: &Path, source: &str, graph: &mut CallGraph) -> Result<()
     // Pass 5: extract type definitions (struct / union / enum / typedef)
     parse_types(path, source, &language, root, graph)?;
 
+    // Pass 6: extract file-scope variable declarations
+    parse_globals(path, source, &language, root, graph)?;
+
     Ok(())
+}
+
+fn parse_globals(
+    path: &Path,
+    source: &str,
+    language: &Language,
+    root: tree_sitter::Node,
+    graph: &mut CallGraph,
+) -> Result<()> {
+    let src = source.as_bytes();
+    let q = Query::new(language, GLOBAL_DECL_QUERY)?;
+    let decl_idx = q.capture_index_for_name("decl").unwrap();
+
+    let mut cursor = QueryCursor::new();
+    let mut matches = cursor.matches(&q, root, src);
+
+    while let Some(m) = matches.next() {
+        let decl_node = match m.captures.iter().find(|c| c.index == decl_idx) {
+            Some(c) => c.node,
+            None => continue,
+        };
+
+        // Skip function prototypes: any child is a function_declarator
+        let has_fn_declarator = decl_node.children(&mut decl_node.walk()).any(|child| {
+            child.kind() == "function_declarator"
+                || (child.kind() == "pointer_declarator"
+                    && child
+                        .children(&mut child.walk())
+                        .any(|gc| gc.kind() == "function_declarator"))
+        });
+        if has_fn_declarator {
+            continue;
+        }
+
+        let is_static = decl_node.children(&mut decl_node.walk()).any(|child| {
+            child.kind() == "storage_class_specifier" && child.utf8_text(src).ok() == Some("static")
+        });
+
+        // Extract the variable name: walk descendants looking for identifier
+        // in declarator position (not inside a type specifier)
+        if let Some(var_name) = extract_var_name(decl_node, src) {
+            let decl_text = decl_node.utf8_text(src).unwrap_or("").trim().to_string();
+            let line = decl_node.start_position().row as u32 + 1;
+            graph.insert_global(GlobalVar {
+                name: var_name,
+                decl: decl_text,
+                is_static,
+                file: path.to_path_buf(),
+                line,
+            });
+        }
+    }
+
+    Ok(())
+}
+
+/// Extract variable name from a declaration node by finding the deepest
+/// `identifier` that is a declarator (not inside a type specifier).
+fn extract_var_name(decl: tree_sitter::Node, src: &[u8]) -> Option<String> {
+    // Walk declarator children: identifier, init_declarator, pointer_declarator, array_declarator
+    for child in decl.children(&mut decl.walk()) {
+        match child.kind() {
+            "identifier" => {
+                return child.utf8_text(src).ok().map(|s| s.to_string());
+            }
+            "init_declarator" | "pointer_declarator" | "array_declarator" => {
+                if let Some(name) = extract_declarator_name(child, src) {
+                    return Some(name);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+fn extract_declarator_name(node: tree_sitter::Node, src: &[u8]) -> Option<String> {
+    for child in node.children(&mut node.walk()) {
+        match child.kind() {
+            "identifier" => return child.utf8_text(src).ok().map(|s| s.to_string()),
+            "init_declarator" | "pointer_declarator" | "array_declarator" => {
+                if let Some(name) = extract_declarator_name(child, src) {
+                    return Some(name);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
 }
 
 fn parse_types(

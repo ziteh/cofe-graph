@@ -87,6 +87,16 @@ pub struct TypeNode {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct GlobalVar {
+    pub name: String,
+    /// Raw declaration text (trimmed)
+    pub decl: String,
+    pub is_static: bool,
+    pub file: PathBuf,
+    pub line: u32,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct IncludeEdge {
     /// Raw path as written in source (e.g. "../config/sdk_config.h" or "nrf_sdh.h")
     pub path: String,
@@ -120,6 +130,8 @@ pub struct CallGraph {
     pub includes: HashMap<PathBuf, Vec<IncludeEdge>>,
     /// Type definitions: struct / union / enum / typedef, keyed by name
     pub types: HashMap<String, Vec<TypeNode>>,
+    /// File-scope variable declarations, keyed by name
+    pub globals: HashMap<String, GlobalVar>,
 }
 
 impl CallGraph {
@@ -146,6 +158,49 @@ impl CallGraph {
         self.symbols.clear();
         self.includes.clear();
         self.types.clear();
+        self.globals.clear();
+    }
+
+    pub fn insert_global(&mut self, var: GlobalVar) {
+        self.globals.insert(var.name.clone(), var);
+    }
+
+    /// List globals in files matching `filename`.
+    pub fn find_globals(&self, filename: &str) -> Vec<&GlobalVar> {
+        let q = filename.to_lowercase();
+        let mut results: Vec<&GlobalVar> = self
+            .globals
+            .values()
+            .filter(|v| v.file.to_string_lossy().to_lowercase().contains(&q))
+            .collect();
+        results.sort_by_key(|v| (&v.file, v.line));
+        results
+    }
+
+    /// Functions whose source references `var_name` as a whole word.
+    pub fn get_global_users(&self, var_name: &str) -> Vec<&FunctionNode> {
+        let mut results: Vec<&FunctionNode> = self
+            .nodes
+            .values()
+            .filter(|n| contains_word(&n.source, var_name))
+            .collect();
+        results.sort_by_key(|n| &n.name);
+        results
+    }
+
+    /// Globals referenced (by name, word-boundary) in the source of `fn_name`.
+    pub fn get_fn_globals(&self, fn_name: &str) -> Vec<&GlobalVar> {
+        let source = match self.nodes.get(fn_name) {
+            Some(n) => &n.source,
+            None => return vec![],
+        };
+        let mut results: Vec<&GlobalVar> = self
+            .globals
+            .values()
+            .filter(|v| contains_word(source, &v.name))
+            .collect();
+        results.sort_by_key(|v| &v.name);
+        results
     }
 
     pub fn insert_type(&mut self, node: TypeNode) {

@@ -404,6 +404,73 @@ impl CofeGraph {
     }
 
     #[tool(
+        description = "List file-scope (global) variable declarations in files matching a filename substring"
+    )]
+    async fn get_globals(&self, params: Parameters<GetIncludesParams>) -> String {
+        let Parameters(GetIncludesParams { file }) = params;
+        let graph = self.graph.read().await;
+        let results = graph.find_globals(&file);
+        if results.is_empty() {
+            return format!("No global variables found in files matching '{file}'");
+        }
+        results
+            .iter()
+            .map(|v| {
+                let vis = if v.is_static { " [static]" } else { "" };
+                format!(
+                    "{}{} @ {}:{}\n  {}",
+                    v.name,
+                    vis,
+                    v.file.display(),
+                    v.line,
+                    v.decl
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    #[tool(
+        description = "Find all functions that reference a global variable by name (word-boundary match in function source)"
+    )]
+    async fn get_global_users(&self, params: Parameters<GetTypeUsersParams>) -> String {
+        let Parameters(GetTypeUsersParams { name }) = params;
+        let graph = self.graph.read().await;
+        let results = graph.get_global_users(&name);
+        if results.is_empty() {
+            return format!("No functions reference global '{name}'");
+        }
+        results
+            .iter()
+            .map(|n| fmt_fn(n))
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    #[tool(
+        description = "List all global variables referenced in a function's source (word-boundary match)"
+    )]
+    async fn get_fn_globals(&self, params: Parameters<GetSourceParams>) -> String {
+        let Parameters(GetSourceParams { name }) = params;
+        let graph = self.graph.read().await;
+        let results = graph.get_fn_globals(&name);
+        if results.is_empty() {
+            if graph.nodes.contains_key(&name) {
+                return format!("'{name}' does not reference any indexed global variables");
+            }
+            return format!("Function '{name}' not found");
+        }
+        results
+            .iter()
+            .map(|v| {
+                let vis = if v.is_static { " [static]" } else { "" };
+                format!("{}{} @ {}:{}", v.name, vis, v.file.display(), v.line)
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    #[tool(
         description = "Look up struct, union, enum, and typedef definitions by name (case-insensitive substring match)"
     )]
     async fn find_type(&self, params: Parameters<FindTypeParams>) -> String {
