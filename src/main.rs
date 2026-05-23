@@ -1,13 +1,7 @@
-mod cache;
-mod graph;
-mod parser;
-mod server;
-pub mod tools;
-
 use anyhow::Result;
-use cache::COFE_DATA_DIR;
+use cofe_graph::cache::COFE_DATA_DIR;
+use cofe_graph::server::CofeGraph;
 use rmcp::ServiceExt;
-use server::CofeGraph;
 use std::path::PathBuf;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
