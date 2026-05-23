@@ -7,17 +7,13 @@ use serde_json::json;
 use crate::annotations::{AnnotationStore, FileAnnotation};
 use crate::graph::CallGraph;
 
-// --- Param structs ---
-
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct AnnotateFileParams {
     #[schemars(
         description = "File path substring — must match exactly one indexed file (case-insensitive)"
     )]
     pub path: String,
-    #[schemars(
-        description = "Subsystem or module this file belongs to"
-    )]
+    #[schemars(description = "Subsystem or module this file belongs to")]
     pub subsystem: String,
     #[schemars(description = "Description of what this file does")]
     pub summary: String,
@@ -40,8 +36,6 @@ pub struct FileContextParams {
     )]
     pub filename: String,
 }
-
-// --- Helpers ---
 
 /// BLAKE3 of sorted function sources for a specific file, first 16 hex chars.
 fn compute_hash(graph: &CallGraph, file_path: &str) -> String {
@@ -87,8 +81,6 @@ fn match_one_file(graph: &CallGraph, substr: &str) -> Result<String, String> {
         )),
     }
 }
-
-// --- Tool functions ---
 
 /// Write a semantic annotation for a file. The current file hash is computed from
 /// the graph and stored alongside the annotation for staleness detection.

@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 
 use crate::cache::COFE_DATA_DIR;
 
+#[derive(Default)]
 pub struct AnnotationStore {
     pub files: HashMap<String, FileAnnotation>,
     path: Option<PathBuf>,
@@ -25,10 +26,10 @@ impl AnnotationStore {
     }
 
     pub fn save(&self) {
-        if let Some(ref p) = self.path {
-            if let Ok(s) = serde_json::to_string_pretty(&self.files) {
-                let _ = std::fs::write(p, s);
-            }
+        if let Some(ref p) = self.path
+            && let Ok(s) = serde_json::to_string_pretty(&self.files)
+        {
+            let _ = std::fs::write(p, s);
         }
     }
 }

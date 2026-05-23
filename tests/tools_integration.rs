@@ -14,6 +14,7 @@ mod tools {
     }
 
     mod analysis;
+    mod annotate;
     mod functions;
     mod globals;
     mod includes;
