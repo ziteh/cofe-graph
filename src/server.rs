@@ -7,7 +7,9 @@ use rmcp::model::{ServerCapabilities, ServerInfo};
 use rmcp::{ServerHandler, tool, tool_handler, tool_router};
 use tokio::sync::RwLock;
 
+use crate::annotations::AnnotationStore;
 use crate::graph::CallGraph;
+use crate::tools::annotate::{AnnotateFileParams, FileContextParams, FilePathParams};
 use crate::tools::functions::{FindFunctionParams, FindInFileParams, GetSourceParams, TopNParams};
 use crate::tools::includes::{GetIncludersParams, GetIncludesParams};
 use crate::tools::symbols::FindSymbolParams;
@@ -17,6 +19,7 @@ use crate::tools::types::{FindTypeParams, GetTypeUsersParams};
 #[derive(Clone)]
 pub struct CofeGraph {
     graph: Arc<RwLock<CallGraph>>,
+    annotations: Arc<RwLock<AnnotationStore>>,
     project_path: PathBuf,
     use_toon: bool,
     max_cache_entries: usize,
@@ -26,6 +29,7 @@ pub struct CofeGraph {
 impl CofeGraph {
     pub fn new(path: PathBuf, use_toon: bool, max_cache_entries: usize) -> Self {
         let graph = Arc::new(RwLock::new(CallGraph::default()));
+        let annotations = Arc::new(RwLock::new(AnnotationStore::load(&path)));
         let g = Arc::clone(&graph);
         let p = path.clone();
         tokio::spawn(async move {
@@ -33,6 +37,7 @@ impl CofeGraph {
         });
         Self {
             graph,
+            annotations,
             project_path: path,
             use_toon,
             max_cache_entries,
@@ -240,6 +245,58 @@ impl CofeGraph {
             &*self.graph.read().await,
             p,
         ))
+    }
+
+    #[tool(
+        description = "Write a semantic annotation for a file (subsystem, summary, key functions). Stores the current file hash for staleness detection. Path must match exactly one indexed file."
+    )]
+    async fn annotate_file(&self, params: Parameters<AnnotateFileParams>) -> String {
+        let Parameters(p) = params;
+        let graph = self.graph.read().await;
+        let mut store = self.annotations.write().await;
+        self.fmt(crate::tools::annotate::annotate_file(&graph, &mut store, p))
+    }
+
+    #[tool(
+        description = "Retrieve the stored annotation(s) for files matching a path substring, with a stale flag if the file has changed since annotation"
+    )]
+    async fn get_file_annotation(&self, params: Parameters<FilePathParams>) -> String {
+        let Parameters(p) = params;
+        let graph = self.graph.read().await;
+        let store = self.annotations.read().await;
+        self.fmt(crate::tools::annotate::get_file_annotation(
+            &graph, &store, p,
+        ))
+    }
+
+    #[tool(description = "List all annotated files with their subsystem and staleness status")]
+    async fn list_file_annotations(&self) -> String {
+        let graph = self.graph.read().await;
+        let store = self.annotations.read().await;
+        self.fmt(crate::tools::annotate::list_file_annotations(
+            &graph, &store,
+        ))
+    }
+
+    #[tool(
+        description = "List indexed files that have no annotation yet, ordered by function count (most functions first)"
+    )]
+    async fn list_unannotated_files(&self) -> String {
+        let graph = self.graph.read().await;
+        let store = self.annotations.read().await;
+        self.fmt(crate::tools::annotate::list_unannotated_files(
+            &graph, &store,
+        ))
+    }
+
+    #[tool(
+        description = "Return a full analysis bundle for a single file: all functions with source and call statistics, globals, types, and any existing annotation. Use this to gather context before calling annotate_file. Path must match exactly one indexed file."
+    )]
+    async fn get_file_context(&self, params: Parameters<FileContextParams>) -> String {
+        let Parameters(p) = params;
+        let graph = self.graph.read().await;
+        let store = self.annotations.read().await;
+        self.fmt(crate::tools::annotate::get_file_context(&graph, &store, p))
     }
 }
 
