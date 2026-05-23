@@ -56,6 +56,14 @@ impl SymbolKind {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct IncludeEdge {
+    /// Raw path as written in source (e.g. "../config/sdk_config.h" or "nrf_sdh.h")
+    pub path: String,
+    /// true for <system.h>, false for "local.h"
+    pub is_system: bool,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SymbolNode {
     pub name: String,
     pub kind: SymbolKind,
@@ -77,6 +85,8 @@ pub struct CallGraph {
     pub macro_referenced: HashSet<String>,
     /// #define constants, function-like macros, and enum values, keyed by name
     pub symbols: HashMap<String, Vec<SymbolNode>>,
+    /// Include edges: file path → list of #include directives in that file
+    pub includes: HashMap<PathBuf, Vec<IncludeEdge>>,
 }
 
 impl CallGraph {
@@ -101,6 +111,7 @@ impl CallGraph {
         self.callees.clear();
         self.macro_referenced.clear();
         self.symbols.clear();
+        self.includes.clear();
     }
 
     pub fn insert_symbol(&mut self, node: SymbolNode) {
@@ -108,6 +119,35 @@ impl CallGraph {
             .entry(node.name.clone())
             .or_default()
             .push(node);
+    }
+
+    /// Returns all #include edges for files whose path contains `filename`.
+    pub fn get_includes(&self, filename: &str) -> Vec<(&PathBuf, &Vec<IncludeEdge>)> {
+        let q = filename.to_lowercase();
+        let mut results: Vec<(&PathBuf, &Vec<IncludeEdge>)> = self
+            .includes
+            .iter()
+            .filter(|(p, _)| p.to_string_lossy().to_lowercase().contains(&q))
+            .collect();
+        results.sort_by_key(|(p, _)| p.as_path());
+        results
+    }
+
+    /// Returns all files that include a header matching `header` (substring of the raw include path).
+    pub fn get_includers(&self, header: &str) -> Vec<(&PathBuf, &IncludeEdge)> {
+        let q = header.to_lowercase();
+        let mut results: Vec<(&PathBuf, &IncludeEdge)> = self
+            .includes
+            .iter()
+            .flat_map(|(file, edges)| {
+                edges
+                    .iter()
+                    .filter(|e| e.path.to_lowercase().contains(&q))
+                    .map(move |e| (file, e))
+            })
+            .collect();
+        results.sort_by_key(|(p, _)| p.as_path());
+        results
     }
 
     pub fn find_symbol(&self, query: &str) -> Vec<&SymbolNode> {

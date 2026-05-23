@@ -54,6 +54,22 @@ pub struct FindInFileParams {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct GetIncludesParams {
+    #[schemars(
+        description = "Filename substring to match against indexed file paths (case-insensitive)"
+    )]
+    pub file: String,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct GetIncludersParams {
+    #[schemars(
+        description = "Header name substring to search for within #include paths (case-insensitive)"
+    )]
+    pub header: String,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct FindSymbolParams {
     #[schemars(
         description = "Symbol name substring to search for (case-insensitive). Matches #define constants, function-like macros, and enum values."
@@ -348,6 +364,62 @@ impl CofeGraph {
             return format!("No functions found in files matching '{filename}'");
         }
         results.join("\n")
+    }
+
+    #[tool(description = "List all #include directives in files matching a filename substring")]
+    async fn get_includes(&self, params: Parameters<GetIncludesParams>) -> String {
+        let Parameters(GetIncludesParams { file }) = params;
+        let graph = self.graph.read().await;
+        let results = graph.get_includes(&file);
+        if results.is_empty() {
+            return format!("No indexed files matching '{file}'");
+        }
+        results
+            .iter()
+            .map(|(path, edges)| {
+                let header = format!("{}:", path.display());
+                let lines: Vec<String> = edges
+                    .iter()
+                    .map(|e| {
+                        if e.is_system {
+                            format!("  <{}>", e.path)
+                        } else {
+                            format!("  \"{}\"", e.path)
+                        }
+                    })
+                    .collect();
+                if lines.is_empty() {
+                    format!("{header}\n  (no includes)")
+                } else {
+                    format!("{header}\n{}", lines.join("\n"))
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n\n")
+    }
+
+    #[tool(
+        description = "Find all files that #include a given header (substring match on the include path)"
+    )]
+    async fn get_includers(&self, params: Parameters<GetIncludersParams>) -> String {
+        let Parameters(GetIncludersParams { header }) = params;
+        let graph = self.graph.read().await;
+        let results = graph.get_includers(&header);
+        if results.is_empty() {
+            return format!("No files include '{header}'");
+        }
+        results
+            .iter()
+            .map(|(file, edge)| {
+                let include_str = if edge.is_system {
+                    format!("<{}>", edge.path)
+                } else {
+                    format!("\"{}\"", edge.path)
+                };
+                format!("{} includes {include_str}", file.display())
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 
     #[tool(
