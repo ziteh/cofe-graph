@@ -34,6 +34,7 @@ fn fn_entry(n: &crate::graph::FunctionNode) -> Value {
         "file": n.file,
         "line": n.line,
         "is_static": n.is_static,
+        "conditions": n.conditions,
     })
 }
 
@@ -80,6 +81,7 @@ pub fn get_source(graph: &CallGraph, params: GetSourceParams) -> String {
             "file": n.file,
             "line": n.line,
             "is_static": n.is_static,
+            "conditions": n.conditions,
             "source": n.source,
         })
         .to_string(),

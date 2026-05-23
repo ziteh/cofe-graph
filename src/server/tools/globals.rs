@@ -21,6 +21,7 @@ pub fn get_globals(graph: &CallGraph, params: GetIncludesParams) -> String {
                 "file": v.file,
                 "line": v.line,
                 "decl": v.decl,
+                "conditions": v.conditions,
             })
         })
         .collect();

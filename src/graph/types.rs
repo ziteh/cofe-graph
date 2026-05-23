@@ -35,6 +35,9 @@ pub struct FunctionNode {
     pub line: u32,
     /// Raw source code of the function
     pub source: String,
+    /// Preprocessor conditions wrapping this node (e.g. ["#ifdef NRF52840", "#else"])
+    #[serde(default)]
+    pub conditions: Vec<String>,
     /// true if the function has `static` storage class (file-private)
     pub is_static: bool,
 }
@@ -81,6 +84,9 @@ pub struct TypeNode {
     pub kind: TypeKind,
     /// Raw source of the full definition, trimmed to 500 chars
     pub definition: String,
+    /// Preprocessor conditions wrapping this node
+    #[serde(default)]
+    pub conditions: Vec<String>,
     pub file: PathBuf,
     pub line: u32,
 }
@@ -90,6 +96,9 @@ pub struct GlobalVar {
     pub name: String,
     /// Raw declaration text (trimmed)
     pub decl: String,
+    /// Preprocessor conditions wrapping this node
+    #[serde(default)]
+    pub conditions: Vec<String>,
     pub is_static: bool,
     pub file: PathBuf,
     pub line: u32,
@@ -107,6 +116,9 @@ pub struct IncludeEdge {
 pub struct SymbolNode {
     pub name: String,
     pub kind: SymbolKind,
+    /// Preprocessor conditions wrapping this node
+    #[serde(default)]
+    pub conditions: Vec<String>,
     /// The value/body text, trimmed to 200 chars
     pub value: Option<String>,
     pub file: PathBuf,

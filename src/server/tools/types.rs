@@ -33,6 +33,7 @@ pub fn find_type(graph: &CallGraph, params: FindTypeParams) -> String {
                 "file": t.file,
                 "line": t.line,
                 "definition": t.definition,
+                "conditions": t.conditions,
             })
         })
         .collect();

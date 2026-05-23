@@ -6,7 +6,7 @@ use tree_sitter::{Language, Node, Query, QueryCursor};
 use crate::graph::{CallGraph, GlobalVar};
 
 const GLOBAL_DECL_QUERY: &str = r#"
-(translation_unit (declaration) @decl)
+(declaration) @decl
 "#;
 
 pub fn parse_globals(
@@ -27,6 +27,21 @@ pub fn parse_globals(
             Some(c) => c.node,
             None => continue,
         };
+
+        // Check if inside a function (since we removed translation_unit constraint)
+        let mut curr = decl_node.parent();
+        let mut is_local = false;
+        while let Some(p) = curr {
+            let pk = p.kind();
+            if pk == "function_definition" || pk == "compound_statement" {
+                is_local = true;
+                break;
+            }
+            curr = p.parent();
+        }
+        if is_local {
+            continue;
+        }
 
         // Skip function prototypes: any child is a function_declarator
         let has_fn_declarator = decl_node.children(&mut decl_node.walk()).any(|child| {
@@ -49,6 +64,7 @@ pub fn parse_globals(
             graph.insert_global(GlobalVar {
                 name: var_name,
                 decl: decl_text,
+                conditions: crate::parser::utils::extract_conditions(decl_node, src),
                 is_static,
                 file: path.to_path_buf(),
                 line: decl_node.start_position().row as u32 + 1,

@@ -27,6 +27,7 @@ pub fn find_symbol(graph: &CallGraph, params: FindSymbolParams) -> String {
                 "value": s.value,
                 "file": s.file,
                 "line": s.line,
+                "conditions": s.conditions,
             })
         })
         .collect();

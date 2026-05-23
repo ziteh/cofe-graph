@@ -68,6 +68,7 @@ pub fn parse_types(
                     name,
                     kind: kind.clone(),
                     definition,
+                    conditions: crate::parser::utils::extract_conditions(dc.node, src),
                     file: path.to_path_buf(),
                     line: nc.node.start_position().row as u32 + 1,
                 });

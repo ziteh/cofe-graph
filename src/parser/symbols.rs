@@ -43,9 +43,16 @@ pub fn parse_symbols(
         let mut matches = cursor.matches(&q, root, src);
         while let Some(m) = matches.next() {
             if let Some(name) = cap_text(&m, name_idx, src) {
+                let name_node = m
+                    .captures
+                    .iter()
+                    .find(|c| c.index == name_idx)
+                    .unwrap()
+                    .node;
                 graph.insert_symbol(SymbolNode {
                     name,
                     kind: SymbolKind::Define,
+                    conditions: crate::parser::utils::extract_conditions(name_node, src),
                     value: cap_text_opt(&m, val_idx, src).map(trim_value),
                     file: path.to_path_buf(),
                     line: m
@@ -76,9 +83,16 @@ pub fn parse_symbols(
                     (None, Some(v)) => Some(trim_value(v)),
                     (None, None) => None,
                 };
+                let name_node = m
+                    .captures
+                    .iter()
+                    .find(|c| c.index == name_idx)
+                    .unwrap()
+                    .node;
                 graph.insert_symbol(SymbolNode {
                     name,
                     kind: SymbolKind::MacroFn,
+                    conditions: crate::parser::utils::extract_conditions(name_node, src),
                     value: display,
                     file: path.to_path_buf(),
                     line: m
@@ -100,9 +114,16 @@ pub fn parse_symbols(
         let mut matches = cursor.matches(&q, root, src);
         while let Some(m) = matches.next() {
             if let Some(name) = cap_text(&m, name_idx, src) {
+                let name_node = m
+                    .captures
+                    .iter()
+                    .find(|c| c.index == name_idx)
+                    .unwrap()
+                    .node;
                 graph.insert_symbol(SymbolNode {
                     name,
                     kind: SymbolKind::EnumValue,
+                    conditions: crate::parser::utils::extract_conditions(name_node, src),
                     value: cap_text_opt(&m, val_idx, src).map(|v| v.trim().to_string()),
                     file: path.to_path_buf(),
                     line: m

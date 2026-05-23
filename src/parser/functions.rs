@@ -59,6 +59,7 @@ pub fn parse_functions(
                     file: path.to_path_buf(),
                     line,
                     source: source_text,
+                    conditions: crate::parser::utils::extract_conditions(dn, src),
                     is_static,
                 });
             }
