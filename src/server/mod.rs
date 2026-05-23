@@ -1,5 +1,6 @@
 mod tools;
 
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use rmcp::handler::server::router::tool::ToolRouter;
@@ -11,7 +12,6 @@ use tokio::sync::RwLock;
 use crate::graph::CallGraph;
 use tools::functions::{FindFunctionParams, FindInFileParams, GetSourceParams, TopNParams};
 use tools::includes::{GetIncludersParams, GetIncludesParams};
-use tools::index::IndexProjectParams;
 use tools::symbols::FindSymbolParams;
 use tools::traverse::{GetPathParams, TraverseParams};
 use tools::types::{FindTypeParams, GetTypeUsersParams};
@@ -19,13 +19,21 @@ use tools::types::{FindTypeParams, GetTypeUsersParams};
 #[derive(Clone)]
 pub struct CofeGraph {
     graph: Arc<RwLock<CallGraph>>,
+    project_path: PathBuf,
     tool_router: ToolRouter<Self>,
 }
 
 impl CofeGraph {
-    pub fn new() -> Self {
+    pub fn new(path: PathBuf) -> Self {
+        let graph = Arc::new(RwLock::new(CallGraph::default()));
+        let g = Arc::clone(&graph);
+        let p = path.clone();
+        tokio::spawn(async move {
+            tools::index::index_project(g, &p).await;
+        });
         Self {
-            graph: Arc::new(RwLock::new(CallGraph::default())),
+            graph,
+            project_path: path,
             tool_router: Self::tool_router(),
         }
     }
@@ -33,12 +41,9 @@ impl CofeGraph {
 
 #[tool_router]
 impl CofeGraph {
-    #[tool(
-        description = "Index all .c and .h files in a directory and build a function call graph"
-    )]
-    async fn index_project(&self, params: Parameters<IndexProjectParams>) -> String {
-        let Parameters(p) = params;
-        tools::index::index_project(Arc::clone(&self.graph), p).await
+    #[tool(description = "Re-index the project directory (use when source files have changed)")]
+    async fn index_project(&self) -> String {
+        tools::index::index_project(Arc::clone(&self.graph), &self.project_path).await
     }
 
     #[tool(description = "Search for functions by name (case-insensitive substring match)")]
@@ -176,6 +181,6 @@ impl CofeGraph {
 impl ServerHandler for CofeGraph {
     fn get_info(&self) -> ServerInfo {
         ServerInfo::new(ServerCapabilities::builder().enable_tools().build())
-            .with_instructions("GraphRAG tools for C code analysis. Call index_project first, then use: find_function / get_callers / get_callees / get_source / get_path / find_dead_code / get_stats / find_functions_in_file / find_high_fan_in.")
+            .with_instructions("GraphRAG tools for C code analysis. The project is indexed automatically at startup. Use index_project to re-index after source changes.")
     }
 }

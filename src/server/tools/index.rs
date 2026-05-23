@@ -1,5 +1,3 @@
-use rmcp::schemars;
-use serde::Deserialize;
 use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -8,20 +6,8 @@ use walkdir::WalkDir;
 use crate::cache::Cache;
 use crate::graph::CallGraph;
 
-#[derive(Debug, Deserialize, schemars::JsonSchema)]
-pub struct IndexProjectParams {
-    #[schemars(description = "Path to the directory containing .c/.h files")]
-    pub path: String,
-}
-
-pub async fn index_project(graph: Arc<RwLock<CallGraph>>, params: IndexProjectParams) -> String {
-    let IndexProjectParams { path } = params;
-    let base = Path::new(&path);
-    if !base.is_dir() {
-        return format!("error: '{}' is not a directory", path);
-    }
-
-    let cache = Cache::open(base);
+pub async fn index_project(graph: Arc<RwLock<CallGraph>>, path: &Path) -> String {
+    let cache = Cache::open(path);
 
     if let Some(ref c) = cache {
         if let Some(cached) = c.load() {
@@ -43,7 +29,7 @@ pub async fn index_project(graph: Arc<RwLock<CallGraph>>, params: IndexProjectPa
     let mut files_err = 0usize;
     let mut sources: Vec<String> = Vec::new();
 
-    for entry in WalkDir::new(base).into_iter().filter_map(|e| e.ok()) {
+    for entry in WalkDir::new(path).into_iter().filter_map(|e| e.ok()) {
         let p = entry.path();
         let ext = p.extension().and_then(|x| x.to_str()).unwrap_or("");
         if ext != "c" && ext != "h" {
