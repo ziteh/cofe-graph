@@ -3,6 +3,8 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use walkdir::WalkDir;
 
+use serde_json::json;
+
 use crate::cache::Cache;
 use crate::graph::CallGraph;
 
@@ -15,10 +17,13 @@ pub async fn index_project(graph: Arc<RwLock<CallGraph>>, path: &Path) -> String
             let edge_count: usize = cached.callees.values().map(|s| s.len()).sum();
             *graph.write().await = cached;
             c.record_hit();
-            return format!(
-                "Loaded from cache (commit {}). Found {fn_count} functions and {edge_count} call edges.",
-                c.commit_hash
-            );
+            return json!({
+                "status": "cached",
+                "commit": c.commit_hash,
+                "functions": fn_count,
+                "call_edges": edge_count,
+            })
+            .to_string();
         }
     }
 
@@ -59,14 +64,23 @@ pub async fn index_project(graph: Arc<RwLock<CallGraph>>, path: &Path) -> String
         }
     }
 
-    if let Some(ref c) = cache {
+    let cached = if let Some(ref c) = cache {
         c.save(&g);
-    }
+        true
+    } else {
+        false
+    };
 
     let fn_count = g.nodes.len();
     let edge_count: usize = g.callees.values().map(|s| s.len()).sum();
-    let cache_note = if cache.is_some() { " (cached)" } else { "" };
-    format!(
-        "Indexed {files_ok} files ({files_err} errors). Found {fn_count} functions and {edge_count} call edges.{cache_note}"
-    )
+
+    json!({
+        "status": "indexed",
+        "files_ok": files_ok,
+        "files_err": files_err,
+        "functions": fn_count,
+        "call_edges": edge_count,
+        "cached": cached,
+    })
+    .to_string()
 }

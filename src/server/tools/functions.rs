@@ -1,7 +1,7 @@
 use rmcp::schemars;
 use serde::Deserialize;
+use serde_json::{Value, json};
 
-use super::fmt_fn;
 use crate::graph::CallGraph;
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
@@ -28,52 +28,62 @@ pub struct TopNParams {
     pub top_n: Option<u32>,
 }
 
+fn fn_entry(n: &crate::graph::FunctionNode) -> Value {
+    json!({
+        "name": n.name,
+        "file": n.file,
+        "line": n.line,
+        "is_static": n.is_static,
+    })
+}
+
 pub fn find_function(graph: &CallGraph, params: FindFunctionParams) -> String {
     let FindFunctionParams { name } = params;
-    let mut results: Vec<String> = graph.find_function(&name).into_iter().map(fmt_fn).collect();
-    results.sort();
+    let mut results: Vec<_> = graph.find_function(&name).into_iter().collect();
+    results.sort_by_key(|n| &n.name);
     if results.is_empty() {
-        return format!("No functions matching '{name}'");
+        return json!({"error": format!("No functions matching '{name}'")}).to_string();
     }
-    results.join("\n")
+    json!({ "matches": results.iter().map(|n| fn_entry(n)).collect::<Vec<_>>() }).to_string()
 }
 
 pub fn find_functions_in_file(graph: &CallGraph, params: FindInFileParams) -> String {
     let FindInFileParams { filename } = params;
-    let mut results: Vec<String> = graph
+    let mut results: Vec<_> = graph
         .find_functions_in_file(&filename)
         .into_iter()
-        .map(fmt_fn)
         .collect();
-    results.sort();
+    results.sort_by_key(|n| &n.name);
     if results.is_empty() {
-        return format!("No functions found in files matching '{filename}'");
+        return json!({"error": format!("No functions found in files matching '{filename}'")})
+            .to_string();
     }
-    results.join("\n")
+    json!({ "matches": results.iter().map(|n| fn_entry(n)).collect::<Vec<_>>() }).to_string()
 }
 
 pub fn get_public_api(graph: &CallGraph, params: FindInFileParams) -> String {
     let FindInFileParams { filename } = params;
-    let mut results: Vec<String> = graph
-        .get_public_api(&filename)
-        .into_iter()
-        .map(fmt_fn)
-        .collect();
-    results.sort();
+    let mut results: Vec<_> = graph.get_public_api(&filename).into_iter().collect();
+    results.sort_by_key(|n| &n.name);
     if results.is_empty() {
-        return format!("No public (non-static) functions found in files matching '{filename}'");
+        return json!({"error": format!("No public (non-static) functions found in files matching '{filename}'")})
+            .to_string();
     }
-    results.join("\n")
+    json!({ "matches": results.iter().map(|n| fn_entry(n)).collect::<Vec<_>>() }).to_string()
 }
 
 pub fn get_source(graph: &CallGraph, params: GetSourceParams) -> String {
     let GetSourceParams { name } = params;
     match graph.nodes.get(&name) {
-        Some(n) => {
-            let vis = if n.is_static { " [static]" } else { "" };
-            format!("// {}:{}{}\n{}", n.file.display(), n.line, vis, n.source)
-        }
-        None => format!("Function '{name}' not found"),
+        Some(n) => json!({
+            "name": n.name,
+            "file": n.file,
+            "line": n.line,
+            "is_static": n.is_static,
+            "source": n.source,
+        })
+        .to_string(),
+        None => json!({"error": format!("Function '{name}' not found")}).to_string(),
     }
 }
 
@@ -81,17 +91,23 @@ pub fn find_high_fan_in(graph: &CallGraph, params: TopNParams) -> String {
     let TopNParams { top_n } = params;
     let ranked = graph.top_by_fan_in(top_n.unwrap_or(10) as usize);
     if ranked.is_empty() {
-        return "No functions in graph".to_string();
+        return json!({"error": "No functions in graph"}).to_string();
     }
-    ranked
+    let results: Vec<Value> = ranked
         .iter()
         .enumerate()
         .map(|(i, (name, count))| {
-            let loc = graph.nodes.get(*name).map_or(String::new(), |nd| {
-                format!(" @ {}:{}", nd.file.display(), nd.line)
-            });
-            format!("{}. {name}{loc} — {count} callers", i + 1)
+            let loc = graph
+                .nodes
+                .get(*name)
+                .map(|nd| json!({"file": nd.file, "line": nd.line}));
+            json!({
+                "rank": i + 1,
+                "name": name,
+                "callers": count,
+                "location": loc,
+            })
         })
-        .collect::<Vec<_>>()
-        .join("\n")
+        .collect();
+    json!({ "results": results }).to_string()
 }

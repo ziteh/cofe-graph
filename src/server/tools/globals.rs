@@ -1,4 +1,5 @@
-use super::fmt_fn;
+use serde_json::json;
+
 use super::functions::GetSourceParams;
 use super::includes::GetIncludesParams;
 use super::types::GetTypeUsersParams;
@@ -8,36 +9,35 @@ pub fn get_globals(graph: &CallGraph, params: GetIncludesParams) -> String {
     let GetIncludesParams { file } = params;
     let results = graph.find_globals(&file);
     if results.is_empty() {
-        return format!("No global variables found in files matching '{file}'");
+        return json!({"error": format!("No global variables found in files matching '{file}'")})
+            .to_string();
     }
-    results
+    let matches: Vec<_> = results
         .iter()
         .map(|v| {
-            let vis = if v.is_static { " [static]" } else { "" };
-            format!(
-                "{}{} @ {}:{}\n  {}",
-                v.name,
-                vis,
-                v.file.display(),
-                v.line,
-                v.decl
-            )
+            json!({
+                "name": v.name,
+                "is_static": v.is_static,
+                "file": v.file,
+                "line": v.line,
+                "decl": v.decl,
+            })
         })
-        .collect::<Vec<_>>()
-        .join("\n")
+        .collect();
+    json!({ "matches": matches }).to_string()
 }
 
 pub fn get_global_users(graph: &CallGraph, params: GetTypeUsersParams) -> String {
     let GetTypeUsersParams { name } = params;
     let results = graph.get_global_users(&name);
     if results.is_empty() {
-        return format!("No functions reference global '{name}'");
+        return json!({"error": format!("No functions reference global '{name}'")}).to_string();
     }
-    results
+    let users: Vec<_> = results
         .iter()
-        .map(|n| fmt_fn(n))
-        .collect::<Vec<_>>()
-        .join("\n")
+        .map(|n| json!({"name": n.name, "file": n.file, "line": n.line, "is_static": n.is_static}))
+        .collect();
+    json!({ "global": name, "users": users }).to_string()
 }
 
 pub fn get_fn_globals(graph: &CallGraph, params: GetSourceParams) -> String {
@@ -45,16 +45,21 @@ pub fn get_fn_globals(graph: &CallGraph, params: GetSourceParams) -> String {
     let results = graph.get_fn_globals(&name);
     if results.is_empty() {
         if graph.nodes.contains_key(&name) {
-            return format!("'{name}' does not reference any indexed global variables");
+            return json!({"error": format!("'{name}' does not reference any indexed global variables")})
+                .to_string();
         }
-        return format!("Function '{name}' not found");
+        return json!({"error": format!("Function '{name}' not found")}).to_string();
     }
-    results
+    let globals: Vec<_> = results
         .iter()
         .map(|v| {
-            let vis = if v.is_static { " [static]" } else { "" };
-            format!("{}{} @ {}:{}", v.name, vis, v.file.display(), v.line)
+            json!({
+                "name": v.name,
+                "is_static": v.is_static,
+                "file": v.file,
+                "line": v.line,
+            })
         })
-        .collect::<Vec<_>>()
-        .join("\n")
+        .collect();
+    json!({ "function": name, "globals": globals }).to_string()
 }

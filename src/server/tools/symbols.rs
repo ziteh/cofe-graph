@@ -1,5 +1,6 @@
 use rmcp::schemars;
 use serde::Deserialize;
+use serde_json::json;
 
 use crate::graph::CallGraph;
 
@@ -15,24 +16,19 @@ pub fn find_symbol(graph: &CallGraph, params: FindSymbolParams) -> String {
     let FindSymbolParams { name } = params;
     let results = graph.find_symbol(&name);
     if results.is_empty() {
-        return format!("No symbols matching '{name}'");
+        return json!({"error": format!("No symbols matching '{name}'")}).to_string();
     }
-    results
+    let matches: Vec<_> = results
         .iter()
         .map(|s| {
-            let value_part = match &s.value {
-                Some(v) => format!(" = {v}"),
-                None => String::new(),
-            };
-            format!(
-                "[{}] {}{}  @ {}:{}",
-                s.kind.as_str(),
-                s.name,
-                value_part,
-                s.file.display(),
-                s.line,
-            )
+            json!({
+                "name": s.name,
+                "kind": s.kind.as_str(),
+                "value": s.value,
+                "file": s.file,
+                "line": s.line,
+            })
         })
-        .collect::<Vec<_>>()
-        .join("\n")
+        .collect();
+    json!({ "matches": matches }).to_string()
 }

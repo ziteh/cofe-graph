@@ -1,5 +1,6 @@
 use rmcp::schemars;
 use serde::Deserialize;
+use serde_json::json;
 
 use crate::graph::CallGraph;
 
@@ -23,48 +24,36 @@ pub fn get_includes(graph: &CallGraph, params: GetIncludesParams) -> String {
     let GetIncludesParams { file } = params;
     let results = graph.get_includes(&file);
     if results.is_empty() {
-        return format!("No indexed files matching '{file}'");
+        return json!({"error": format!("No indexed files matching '{file}'")}).to_string();
     }
-    results
+    let entries: Vec<_> = results
         .iter()
         .map(|(path, edges)| {
-            let header = format!("{}:", path.display());
-            let lines: Vec<String> = edges
+            let includes: Vec<_> = edges
                 .iter()
-                .map(|e| {
-                    if e.is_system {
-                        format!("  <{}>", e.path)
-                    } else {
-                        format!("  \"{}\"", e.path)
-                    }
-                })
+                .map(|e| json!({"path": e.path, "is_system": e.is_system}))
                 .collect();
-            if lines.is_empty() {
-                format!("{header}\n  (no includes)")
-            } else {
-                format!("{header}\n{}", lines.join("\n"))
-            }
+            json!({"file": path, "includes": includes})
         })
-        .collect::<Vec<_>>()
-        .join("\n\n")
+        .collect();
+    json!({ "results": entries }).to_string()
 }
 
 pub fn get_includers(graph: &CallGraph, params: GetIncludersParams) -> String {
     let GetIncludersParams { header } = params;
     let results = graph.get_includers(&header);
     if results.is_empty() {
-        return format!("No files include '{header}'");
+        return json!({"error": format!("No files include '{header}'")}).to_string();
     }
-    results
+    let includers: Vec<_> = results
         .iter()
         .map(|(file, edge)| {
-            let include_str = if edge.is_system {
-                format!("<{}>", edge.path)
-            } else {
-                format!("\"{}\"", edge.path)
-            };
-            format!("{} includes {include_str}", file.display())
+            json!({
+                "file": file,
+                "path": edge.path,
+                "is_system": edge.is_system,
+            })
         })
-        .collect::<Vec<_>>()
-        .join("\n")
+        .collect();
+    json!({ "header": header, "includers": includers }).to_string()
 }

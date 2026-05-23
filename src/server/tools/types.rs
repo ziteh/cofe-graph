@@ -1,5 +1,6 @@
 use rmcp::schemars;
 use serde::Deserialize;
+use serde_json::json;
 
 use crate::graph::CallGraph;
 
@@ -21,33 +22,32 @@ pub fn find_type(graph: &CallGraph, params: FindTypeParams) -> String {
     let FindTypeParams { name } = params;
     let results = graph.find_type(&name);
     if results.is_empty() {
-        return format!("No types matching '{name}'");
+        return json!({"error": format!("No types matching '{name}'")}).to_string();
     }
-    results
+    let matches: Vec<_> = results
         .iter()
         .map(|t| {
-            format!(
-                "[{}] {} @ {}:{}\n{}",
-                t.kind.as_str(),
-                t.name,
-                t.file.display(),
-                t.line,
-                t.definition
-            )
+            json!({
+                "name": t.name,
+                "kind": t.kind.as_str(),
+                "file": t.file,
+                "line": t.line,
+                "definition": t.definition,
+            })
         })
-        .collect::<Vec<_>>()
-        .join("\n\n")
+        .collect();
+    json!({ "matches": matches }).to_string()
 }
 
 pub fn get_type_users(graph: &CallGraph, params: GetTypeUsersParams) -> String {
     let GetTypeUsersParams { name } = params;
     let results = graph.get_type_users(&name);
     if results.is_empty() {
-        return format!("No functions reference type '{name}'");
+        return json!({"error": format!("No functions reference type '{name}'")}).to_string();
     }
-    results
+    let users: Vec<_> = results
         .iter()
-        .map(|n| format!("{} @ {}:{}", n.name, n.file.display(), n.line))
-        .collect::<Vec<_>>()
-        .join("\n")
+        .map(|n| json!({"name": n.name, "file": n.file, "line": n.line, "is_static": n.is_static}))
+        .collect();
+    json!({ "type": name, "users": users }).to_string()
 }
