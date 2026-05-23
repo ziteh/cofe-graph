@@ -15,9 +15,10 @@ async fn test_find_type() {
     let result = find_type(&graph, params);
 
     let v: Value = serde_json::from_str(&result).unwrap();
-    let matches = v["matches"].as_array().expect("Expected 'matches' array");
+    assert_eq!(v["isError"], false);
+    let content = v["content"].as_array().expect("Expected 'content' array");
 
-    assert!(matches.iter().any(|m| m["name"] == "state_t"));
+    assert!(content.iter().any(|m| m["name"] == "state_t"));
 }
 
 #[tokio::test]
@@ -31,12 +32,12 @@ async fn test_get_type_users() {
     let result = get_type_users(&graph, params);
 
     let v: Value = serde_json::from_str(&result).unwrap();
-    if v.get("error").is_some() {
+    if v["isError"] == true {
         assert_eq!(
-            v["error"].as_str().unwrap(),
+            v["content"].as_str().unwrap(),
             "No functions reference type 'state_t'"
         );
     } else {
-        assert!(v.get("matches").is_some() || v.get("users").is_some());
+        assert!(v["content"].is_object());
     }
 }

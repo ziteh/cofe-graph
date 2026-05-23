@@ -22,15 +22,16 @@ async fn test_find_function() {
     let result = find_function(&graph, params);
 
     let v: Value = serde_json::from_str(&result).unwrap();
-    let matches = v["matches"].as_array().unwrap();
+    assert_eq!(v["isError"], false);
+    let content = v["content"].as_array().unwrap();
 
     assert_eq!(
-        matches.len(),
+        content.len(),
         1,
         "Should find exactly one 'process_data' function"
     );
-    assert_eq!(matches[0]["name"], "process_data");
-    assert_eq!(matches[0]["is_static"], false);
+    assert_eq!(content[0]["name"], "process_data");
+    assert_eq!(content[0]["is_static"], false);
 }
 
 #[tokio::test]
@@ -52,13 +53,14 @@ async fn test_find_functions_in_file() {
     let result = find_functions_in_file(&graph, params);
 
     let v: Value = serde_json::from_str(&result).unwrap();
-    let matches = v["matches"].as_array().unwrap();
+    assert_eq!(v["isError"], false);
+    let content = v["content"].as_array().unwrap();
 
-    assert_eq!(matches.len(), 3, "Should find helper, init, work");
+    assert_eq!(content.len(), 3, "Should find helper, init, work");
 
-    let helper = matches.iter().find(|m| m["name"] == "helper").unwrap();
+    let helper = content.iter().find(|m| m["name"] == "helper").unwrap();
     assert_eq!(helper["is_static"], true, "helper should be static");
 
-    let work = matches.iter().find(|m| m["name"] == "work").unwrap();
+    let work = content.iter().find(|m| m["name"] == "work").unwrap();
     assert_eq!(work["is_static"], false, "work should be public");
 }

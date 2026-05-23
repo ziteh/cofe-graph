@@ -16,7 +16,8 @@ pub fn find_symbol(graph: &CallGraph, params: FindSymbolParams) -> String {
     let FindSymbolParams { name } = params;
     let results = graph.find_symbol(&name);
     if results.is_empty() {
-        return json!({"error": format!("No symbols matching '{name}'")}).to_string();
+        return json!({"content": format!("No symbols matching '{name}'"), "isError": true})
+            .to_string();
     }
     let matches: Vec<_> = results
         .iter()
@@ -31,5 +32,5 @@ pub fn find_symbol(graph: &CallGraph, params: FindSymbolParams) -> String {
             })
         })
         .collect();
-    json!({ "matches": matches }).to_string()
+    json!({"content": matches, "isError": false}).to_string()
 }

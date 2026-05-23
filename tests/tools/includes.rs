@@ -23,7 +23,8 @@ async fn test_get_includes() {
     let result = get_includes(&graph, params);
 
     let v: Value = serde_json::from_str(&result).unwrap();
-    let results = v["results"].as_array().expect("Expected 'results' array");
+    assert_eq!(v["isError"], false);
+    let results = v["content"].as_array().expect("Expected 'content' array");
     let includes: Vec<&str> = results[0]["includes"]
         .as_array()
         .unwrap()
@@ -60,7 +61,8 @@ async fn test_get_includers() {
     let result = get_includers(&graph, params);
 
     let v: Value = serde_json::from_str(&result).unwrap();
-    let includers: Vec<&str> = v["includers"]
+    assert_eq!(v["isError"], false);
+    let includers: Vec<&str> = v["content"]["includers"]
         .as_array()
         .expect("Expected 'includers' array")
         .iter()

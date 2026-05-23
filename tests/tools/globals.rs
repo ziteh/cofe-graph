@@ -18,9 +18,10 @@ async fn test_get_globals() {
     let result = get_globals(&graph, params);
 
     let v: Value = serde_json::from_str(&result).unwrap();
-    if let Some(matches) = v["matches"].as_array() {
-        assert!(matches.iter().any(|m| m["name"] == "g_var"));
+    assert_eq!(v["isError"], false);
+    if let Some(content) = v["content"].as_array() {
+        assert!(content.iter().any(|m| m["name"] == "g_var"));
     } else {
-        panic!("Expected 'matches' array with global variable");
+        panic!("Expected 'content' array with global variable");
     }
 }

@@ -22,7 +22,8 @@ pub fn find_type(graph: &CallGraph, params: FindTypeParams) -> String {
     let FindTypeParams { name } = params;
     let results = graph.find_type(&name);
     if results.is_empty() {
-        return json!({"error": format!("No types matching '{name}'")}).to_string();
+        return json!({"content": format!("No types matching '{name}'"), "isError": true})
+            .to_string();
     }
     let matches: Vec<_> = results
         .iter()
@@ -37,18 +38,18 @@ pub fn find_type(graph: &CallGraph, params: FindTypeParams) -> String {
             })
         })
         .collect();
-    json!({ "matches": matches }).to_string()
+    json!({"content": matches, "isError": false}).to_string()
 }
 
 pub fn get_type_users(graph: &CallGraph, params: GetTypeUsersParams) -> String {
     let GetTypeUsersParams { name } = params;
     let results = graph.get_type_users(&name);
     if results.is_empty() {
-        return json!({"error": format!("No functions reference type '{name}'")}).to_string();
+        return json!({"content": format!("No functions reference type '{name}'"), "isError": true}).to_string();
     }
     let users: Vec<_> = results
         .iter()
         .map(|n| json!({"name": n.name, "file": n.file, "line": n.line, "is_static": n.is_static}))
         .collect();
-    json!({ "type": name, "users": users }).to_string()
+    json!({"content": json!({"type": name, "users": users}), "isError": false}).to_string()
 }

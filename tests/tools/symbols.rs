@@ -13,9 +13,10 @@ async fn test_find_symbol() {
     let result = find_symbol(&graph, params);
 
     let v: Value = serde_json::from_str(&result).unwrap();
-    let matches = v["matches"].as_array().expect("Expected 'matches' array");
+    assert_eq!(v["isError"], false);
+    let content = v["content"].as_array().expect("Expected 'content' array");
 
-    assert_eq!(matches.len(), 1);
-    assert_eq!(matches[0]["name"], "CONST_VAL");
-    assert!(matches[0]["file"].as_str().unwrap().ends_with("header.h"));
+    assert_eq!(content.len(), 1);
+    assert_eq!(content[0]["name"], "CONST_VAL");
+    assert!(content[0]["file"].as_str().unwrap().ends_with("header.h"));
 }

@@ -24,7 +24,8 @@ pub fn get_includes(graph: &CallGraph, params: GetIncludesParams) -> String {
     let GetIncludesParams { file } = params;
     let results = graph.get_includes(&file);
     if results.is_empty() {
-        return json!({"error": format!("No indexed files matching '{file}'")}).to_string();
+        return json!({"content": format!("No indexed files matching '{file}'"), "isError": true})
+            .to_string();
     }
     let entries: Vec<_> = results
         .iter()
@@ -36,14 +37,15 @@ pub fn get_includes(graph: &CallGraph, params: GetIncludesParams) -> String {
             json!({"file": path, "includes": includes})
         })
         .collect();
-    json!({ "results": entries }).to_string()
+    json!({"content": entries, "isError": false}).to_string()
 }
 
 pub fn get_includers(graph: &CallGraph, params: GetIncludersParams) -> String {
     let GetIncludersParams { header } = params;
     let results = graph.get_includers(&header);
     if results.is_empty() {
-        return json!({"error": format!("No files include '{header}'")}).to_string();
+        return json!({"content": format!("No files include '{header}'"), "isError": true})
+            .to_string();
     }
     let includers: Vec<_> = results
         .iter()
@@ -55,5 +57,6 @@ pub fn get_includers(graph: &CallGraph, params: GetIncludersParams) -> String {
             })
         })
         .collect();
-    json!({ "header": header, "includers": includers }).to_string()
+    json!({"content": json!({"header": header, "includers": includers}), "isError": false})
+        .to_string()
 }

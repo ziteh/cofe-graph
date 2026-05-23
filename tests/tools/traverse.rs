@@ -24,7 +24,8 @@ async fn test_get_path() {
     let result = get_path(&graph, params);
 
     let v: Value = serde_json::from_str(&result).unwrap();
-    let path = v["path"].as_array().unwrap();
+    assert_eq!(v["isError"], false);
+    let path = v["content"]["path"].as_array().unwrap();
 
     assert!(path.len() >= 4, "Path should contain at least 4 nodes");
     assert_eq!(path[0], "main");

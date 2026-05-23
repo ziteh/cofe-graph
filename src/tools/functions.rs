@@ -43,9 +43,11 @@ pub fn find_function(graph: &CallGraph, params: FindFunctionParams) -> String {
     let mut results: Vec<_> = graph.find_function(&name).into_iter().collect();
     results.sort_by_key(|n| &n.name);
     if results.is_empty() {
-        return json!({"error": format!("No functions matching '{name}'")}).to_string();
+        return json!({"content": format!("No functions matching '{name}'"), "isError": true})
+            .to_string();
     }
-    json!({ "matches": results.iter().map(|n| fn_entry(n)).collect::<Vec<_>>() }).to_string()
+    json!({"content": results.iter().map(|n| fn_entry(n)).collect::<Vec<_>>(), "isError": false})
+        .to_string()
 }
 
 pub fn find_functions_in_file(graph: &CallGraph, params: FindInFileParams) -> String {
@@ -56,10 +58,11 @@ pub fn find_functions_in_file(graph: &CallGraph, params: FindInFileParams) -> St
         .collect();
     results.sort_by_key(|n| &n.name);
     if results.is_empty() {
-        return json!({"error": format!("No functions found in files matching '{filename}'")})
+        return json!({"content": format!("No functions found in files matching '{filename}'"), "isError": true})
             .to_string();
     }
-    json!({ "matches": results.iter().map(|n| fn_entry(n)).collect::<Vec<_>>() }).to_string()
+    json!({"content": results.iter().map(|n| fn_entry(n)).collect::<Vec<_>>(), "isError": false})
+        .to_string()
 }
 
 pub fn get_public_api(graph: &CallGraph, params: FindInFileParams) -> String {
@@ -67,25 +70,31 @@ pub fn get_public_api(graph: &CallGraph, params: FindInFileParams) -> String {
     let mut results: Vec<_> = graph.get_public_api(&filename).into_iter().collect();
     results.sort_by_key(|n| &n.name);
     if results.is_empty() {
-        return json!({"error": format!("No public (non-static) functions found in files matching '{filename}'")})
+        return json!({"content": format!("No public (non-static) functions found in files matching '{filename}'"), "isError": true})
             .to_string();
     }
-    json!({ "matches": results.iter().map(|n| fn_entry(n)).collect::<Vec<_>>() }).to_string()
+    json!({"content": results.iter().map(|n| fn_entry(n)).collect::<Vec<_>>(), "isError": false})
+        .to_string()
 }
 
 pub fn get_source(graph: &CallGraph, params: GetSourceParams) -> String {
     let GetSourceParams { name } = params;
     match graph.nodes.get(&name) {
         Some(n) => json!({
-            "name": n.name,
-            "file": n.file,
-            "line": n.line,
-            "is_static": n.is_static,
-            "conditions": n.conditions,
-            "source": n.source,
+            "content": json!({
+                "name": n.name,
+                "file": n.file,
+                "line": n.line,
+                "is_static": n.is_static,
+                "conditions": n.conditions,
+                "source": n.source,
+            }),
+            "isError": false
         })
         .to_string(),
-        None => json!({"error": format!("Function '{name}' not found")}).to_string(),
+        None => {
+            json!({"content": format!("Function '{name}' not found"), "isError": true}).to_string()
+        }
     }
 }
 
@@ -93,7 +102,7 @@ pub fn find_high_fan_in(graph: &CallGraph, params: TopNParams) -> String {
     let TopNParams { top_n } = params;
     let ranked = graph.top_by_fan_in(top_n.unwrap_or(10) as usize);
     if ranked.is_empty() {
-        return json!({"error": "No functions in graph"}).to_string();
+        return json!({"content": "No functions in graph", "isError": true}).to_string();
     }
     let results: Vec<Value> = ranked
         .iter()
@@ -111,5 +120,5 @@ pub fn find_high_fan_in(graph: &CallGraph, params: TopNParams) -> String {
             })
         })
         .collect();
-    json!({ "results": results }).to_string()
+    json!({"content": results, "isError": false}).to_string()
 }

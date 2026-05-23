@@ -18,8 +18,8 @@ async fn test_find_dead_code() {
 
     let result = find_dead_code(&graph);
     let v: Value = serde_json::from_str(&result).unwrap();
-
-    assert!(v.get("summary").is_some(), "Should contain summary");
+    assert_eq!(v["isError"], false);
+    assert!(v["content"].get("summary").is_some(), "Should contain summary");
 }
 
 #[tokio::test]
@@ -37,6 +37,6 @@ async fn test_get_stats() {
 
     let result = get_stats(&graph);
     let v: Value = serde_json::from_str(&result).unwrap();
-
-    assert!(v.get("functions").is_some() || v.get("stats").is_some());
+    assert_eq!(v["isError"], false);
+    assert!(v["content"].get("functions").is_some());
 }
