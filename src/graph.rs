@@ -38,6 +38,33 @@ pub struct FunctionNode {
     pub source: String,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub enum SymbolKind {
+    Define,
+    MacroFn,
+    EnumValue,
+}
+
+impl SymbolKind {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            SymbolKind::Define => "define",
+            SymbolKind::MacroFn => "macro_fn",
+            SymbolKind::EnumValue => "enum_value",
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct SymbolNode {
+    pub name: String,
+    pub kind: SymbolKind,
+    /// The value/body text, trimmed to 200 chars
+    pub value: Option<String>,
+    pub file: PathBuf,
+    pub line: u32,
+}
+
 #[derive(Default, Serialize, Deserialize)]
 pub struct CallGraph {
     /// All function nodes, keyed by function name
@@ -48,6 +75,8 @@ pub struct CallGraph {
     pub callees: HashMap<String, HashSet<String>>,
     /// Functions that appear as arguments to macro calls (UPPER_CASE identifiers)
     pub macro_referenced: HashSet<String>,
+    /// #define constants, function-like macros, and enum values, keyed by name
+    pub symbols: HashMap<String, Vec<SymbolNode>>,
 }
 
 impl CallGraph {
@@ -71,6 +100,26 @@ impl CallGraph {
         self.callers.clear();
         self.callees.clear();
         self.macro_referenced.clear();
+        self.symbols.clear();
+    }
+
+    pub fn insert_symbol(&mut self, node: SymbolNode) {
+        self.symbols
+            .entry(node.name.clone())
+            .or_default()
+            .push(node);
+    }
+
+    pub fn find_symbol(&self, query: &str) -> Vec<&SymbolNode> {
+        let q = query.to_lowercase();
+        let mut results: Vec<&SymbolNode> = self
+            .symbols
+            .iter()
+            .filter(|(name, _)| name.to_lowercase().contains(&q))
+            .flat_map(|(_, nodes)| nodes.iter())
+            .collect();
+        results.sort_by(|a, b| a.name.cmp(&b.name).then(a.file.cmp(&b.file)));
+        results
     }
 
     pub fn get_callers(&self, name: &str, depth: usize) -> Vec<String> {

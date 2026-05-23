@@ -54,6 +54,14 @@ pub struct FindInFileParams {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct FindSymbolParams {
+    #[schemars(
+        description = "Symbol name substring to search for (case-insensitive). Matches #define constants, function-like macros, and enum values."
+    )]
+    pub name: String,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct TopNParams {
     #[schemars(description = "Number of results to return (default: 10)")]
     pub top_n: Option<u32>,
@@ -340,6 +348,36 @@ impl CofeGraph {
             return format!("No functions found in files matching '{filename}'");
         }
         results.join("\n")
+    }
+
+    #[tool(
+        description = "Look up #define constants, function-like macros, and enum values by name (case-insensitive substring match)"
+    )]
+    async fn find_symbol(&self, params: Parameters<FindSymbolParams>) -> String {
+        let Parameters(FindSymbolParams { name }) = params;
+        let graph = self.graph.read().await;
+        let results = graph.find_symbol(&name);
+        if results.is_empty() {
+            return format!("No symbols matching '{name}'");
+        }
+        results
+            .iter()
+            .map(|s| {
+                let value_part = match &s.value {
+                    Some(v) => format!(" = {v}"),
+                    None => String::new(),
+                };
+                format!(
+                    "[{}] {}{}  @ {}:{}",
+                    s.kind.as_str(),
+                    s.name,
+                    value_part,
+                    s.file.display(),
+                    s.line,
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 
     #[tool(

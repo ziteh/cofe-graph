@@ -1,4 +1,4 @@
-use crate::graph::{CallGraph, FunctionNode};
+use crate::graph::{CallGraph, FunctionNode, SymbolKind, SymbolNode};
 use anyhow::Result;
 use std::path::Path;
 use streaming_iterator::StreamingIterator;
@@ -14,6 +14,25 @@ const FUNCTION_DEF_QUERY: &str = r#"
 const CALL_EXPR_QUERY: &str = r#"
 (call_expression
   function: (identifier) @callee)
+"#;
+
+const DEFINE_QUERY: &str = r#"
+(preproc_def
+  name: (identifier) @name
+  value: (preproc_arg)? @value)
+"#;
+
+const MACRO_FN_QUERY: &str = r#"
+(preproc_function_def
+  name: (identifier) @name
+  parameters: (preproc_params) @params
+  value: (preproc_arg)? @value)
+"#;
+
+const ENUM_VALUE_QUERY: &str = r#"
+(enumerator
+  name: (identifier) @name
+  value: (_)? @value)
 "#;
 
 const MACRO_ARG_QUERY: &str = r#"
@@ -107,10 +126,136 @@ pub fn parse_file(path: &Path, source: &str, graph: &mut CallGraph) -> Result<()
         }
     }
 
+    // Pass 3: extract #define constants, function-like macros, and enum values
+    parse_symbols(path, source, &language, root, graph)?;
+
     Ok(())
 }
 
-/// Pass 3: scan for function names that appear as arguments to macro calls.
+fn parse_symbols(
+    path: &Path,
+    source: &str,
+    language: &Language,
+    root: tree_sitter::Node,
+    graph: &mut CallGraph,
+) -> Result<()> {
+    let src = source.as_bytes();
+
+    // Object-like #define
+    {
+        let q = Query::new(language, DEFINE_QUERY)?;
+        let name_idx = q.capture_index_for_name("name").unwrap();
+        let val_idx = q.capture_index_for_name("value").unwrap();
+        let mut cursor = QueryCursor::new();
+        let mut matches = cursor.matches(&q, root, src);
+        while let Some(m) = matches.next() {
+            let name = cap_text(&m, name_idx, src);
+            let value = cap_text_opt(&m, val_idx, src);
+            if let Some(name) = name {
+                graph.insert_symbol(SymbolNode {
+                    name,
+                    kind: SymbolKind::Define,
+                    value: value.map(trim_value),
+                    file: path.to_path_buf(),
+                    line: m
+                        .captures
+                        .iter()
+                        .find(|c| c.index == name_idx)
+                        .map_or(0, |c| c.node.start_position().row as u32 + 1),
+                });
+            }
+        }
+    }
+
+    // Function-like #define FOO(x) ...
+    {
+        let q = Query::new(language, MACRO_FN_QUERY)?;
+        let name_idx = q.capture_index_for_name("name").unwrap();
+        let params_idx = q.capture_index_for_name("params").unwrap();
+        let val_idx = q.capture_index_for_name("value").unwrap();
+        let mut cursor = QueryCursor::new();
+        let mut matches = cursor.matches(&q, root, src);
+        while let Some(m) = matches.next() {
+            let name = cap_text(&m, name_idx, src);
+            let params = cap_text_opt(&m, params_idx, src);
+            let value = cap_text_opt(&m, val_idx, src);
+            if let Some(name) = name {
+                let display = match (params, value) {
+                    (Some(p), Some(v)) => Some(format!("{p} {}", trim_value(v))),
+                    (Some(p), None) => Some(p),
+                    (None, Some(v)) => Some(trim_value(v)),
+                    (None, None) => None,
+                };
+                graph.insert_symbol(SymbolNode {
+                    name,
+                    kind: SymbolKind::MacroFn,
+                    value: display,
+                    file: path.to_path_buf(),
+                    line: m
+                        .captures
+                        .iter()
+                        .find(|c| c.index == name_idx)
+                        .map_or(0, |c| c.node.start_position().row as u32 + 1),
+                });
+            }
+        }
+    }
+
+    // Enum values
+    {
+        let q = Query::new(language, ENUM_VALUE_QUERY)?;
+        let name_idx = q.capture_index_for_name("name").unwrap();
+        let val_idx = q.capture_index_for_name("value").unwrap();
+        let mut cursor = QueryCursor::new();
+        let mut matches = cursor.matches(&q, root, src);
+        while let Some(m) = matches.next() {
+            let name = cap_text(&m, name_idx, src);
+            let value = cap_text_opt(&m, val_idx, src);
+            if let Some(name) = name {
+                graph.insert_symbol(SymbolNode {
+                    name,
+                    kind: SymbolKind::EnumValue,
+                    value: value.map(|v| v.trim().to_string()),
+                    file: path.to_path_buf(),
+                    line: m
+                        .captures
+                        .iter()
+                        .find(|c| c.index == name_idx)
+                        .map_or(0, |c| c.node.start_position().row as u32 + 1),
+                });
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn cap_text<'a>(m: &tree_sitter::QueryMatch<'_, 'a>, idx: u32, src: &'a [u8]) -> Option<String> {
+    m.captures
+        .iter()
+        .find(|c| c.index == idx)
+        .and_then(|c| c.node.utf8_text(src).ok())
+        .map(|s| s.to_string())
+}
+
+fn cap_text_opt<'a>(
+    m: &tree_sitter::QueryMatch<'_, 'a>,
+    idx: u32,
+    src: &'a [u8],
+) -> Option<String> {
+    cap_text(m, idx, src)
+}
+
+fn trim_value(s: String) -> String {
+    let trimmed = s.trim();
+    if trimmed.len() > 200 {
+        format!("{}…", &trimmed[..200])
+    } else {
+        trimmed.to_string()
+    }
+}
+
+/// Pass 4: scan for function names that appear as arguments to macro calls.
 /// Must be called after all files have been parsed (needs graph.nodes to be populated).
 pub fn scan_macro_refs(source: &str, graph: &mut CallGraph) -> Result<()> {
     let language: Language = tree_sitter_c::LANGUAGE.into();
