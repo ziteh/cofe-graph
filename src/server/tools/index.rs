@@ -8,8 +8,12 @@ use serde_json::json;
 use crate::cache::Cache;
 use crate::graph::CallGraph;
 
-pub async fn index_project(graph: Arc<RwLock<CallGraph>>, path: &Path) -> String {
-    let cache = Cache::open(path);
+pub async fn index_project(
+    graph: Arc<RwLock<CallGraph>>,
+    path: &Path,
+    max_cache_entries: usize,
+) -> String {
+    let cache = Cache::open(path, max_cache_entries);
 
     if let Some(ref c) = cache {
         if let Some(cached) = c.load() {

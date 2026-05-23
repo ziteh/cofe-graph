@@ -21,21 +21,23 @@ pub struct CofeGraph {
     graph: Arc<RwLock<CallGraph>>,
     project_path: PathBuf,
     use_toon: bool,
+    max_cache_entries: usize,
     tool_router: ToolRouter<Self>,
 }
 
 impl CofeGraph {
-    pub fn new(path: PathBuf, use_toon: bool) -> Self {
+    pub fn new(path: PathBuf, use_toon: bool, max_cache_entries: usize) -> Self {
         let graph = Arc::new(RwLock::new(CallGraph::default()));
         let g = Arc::clone(&graph);
         let p = path.clone();
         tokio::spawn(async move {
-            tools::index::index_project(g, &p).await;
+            tools::index::index_project(g, &p, max_cache_entries).await;
         });
         Self {
             graph,
             project_path: path,
             use_toon,
+            max_cache_entries,
             tool_router: Self::tool_router(),
         }
     }
@@ -55,7 +57,14 @@ impl CofeGraph {
 impl CofeGraph {
     #[tool(description = "Re-index the project directory (use when source files have changed)")]
     async fn index_project(&self) -> String {
-        self.fmt(tools::index::index_project(Arc::clone(&self.graph), &self.project_path).await)
+        self.fmt(
+            tools::index::index_project(
+                Arc::clone(&self.graph),
+                &self.project_path,
+                self.max_cache_entries,
+            )
+            .await,
+        )
     }
 
     #[tool(description = "Search for functions by name (case-insensitive substring match)")]
