@@ -1,0 +1,119 @@
+use anyhow::Result;
+use std::path::Path;
+use streaming_iterator::StreamingIterator;
+use tree_sitter::{Language, Node, Query, QueryCursor};
+
+use super::utils::{cap_text, cap_text_opt, trim_value};
+use crate::graph::{CallGraph, SymbolKind, SymbolNode};
+
+const DEFINE_QUERY: &str = r#"
+(preproc_def
+  name: (identifier) @name
+  value: (preproc_arg)? @value)
+"#;
+
+const MACRO_FN_QUERY: &str = r#"
+(preproc_function_def
+  name: (identifier) @name
+  parameters: (preproc_params) @params
+  value: (preproc_arg)? @value)
+"#;
+
+const ENUM_VALUE_QUERY: &str = r#"
+(enumerator
+  name: (identifier) @name
+  value: (_)? @value)
+"#;
+
+pub fn parse_symbols(
+    path: &Path,
+    source: &str,
+    language: &Language,
+    root: Node,
+    graph: &mut CallGraph,
+) -> Result<()> {
+    let src = source.as_bytes();
+
+    // Object-like #define
+    {
+        let q = Query::new(language, DEFINE_QUERY)?;
+        let name_idx = q.capture_index_for_name("name").unwrap();
+        let val_idx = q.capture_index_for_name("value").unwrap();
+        let mut cursor = QueryCursor::new();
+        let mut matches = cursor.matches(&q, root, src);
+        while let Some(m) = matches.next() {
+            if let Some(name) = cap_text(&m, name_idx, src) {
+                graph.insert_symbol(SymbolNode {
+                    name,
+                    kind: SymbolKind::Define,
+                    value: cap_text_opt(&m, val_idx, src).map(trim_value),
+                    file: path.to_path_buf(),
+                    line: m
+                        .captures
+                        .iter()
+                        .find(|c| c.index == name_idx)
+                        .map_or(0, |c| c.node.start_position().row as u32 + 1),
+                });
+            }
+        }
+    }
+
+    // Function-like #define FOO(x) ...
+    {
+        let q = Query::new(language, MACRO_FN_QUERY)?;
+        let name_idx = q.capture_index_for_name("name").unwrap();
+        let params_idx = q.capture_index_for_name("params").unwrap();
+        let val_idx = q.capture_index_for_name("value").unwrap();
+        let mut cursor = QueryCursor::new();
+        let mut matches = cursor.matches(&q, root, src);
+        while let Some(m) = matches.next() {
+            if let Some(name) = cap_text(&m, name_idx, src) {
+                let params = cap_text_opt(&m, params_idx, src);
+                let value = cap_text_opt(&m, val_idx, src);
+                let display = match (params, value) {
+                    (Some(p), Some(v)) => Some(format!("{p} {}", trim_value(v))),
+                    (Some(p), None) => Some(p),
+                    (None, Some(v)) => Some(trim_value(v)),
+                    (None, None) => None,
+                };
+                graph.insert_symbol(SymbolNode {
+                    name,
+                    kind: SymbolKind::MacroFn,
+                    value: display,
+                    file: path.to_path_buf(),
+                    line: m
+                        .captures
+                        .iter()
+                        .find(|c| c.index == name_idx)
+                        .map_or(0, |c| c.node.start_position().row as u32 + 1),
+                });
+            }
+        }
+    }
+
+    // Enum values
+    {
+        let q = Query::new(language, ENUM_VALUE_QUERY)?;
+        let name_idx = q.capture_index_for_name("name").unwrap();
+        let val_idx = q.capture_index_for_name("value").unwrap();
+        let mut cursor = QueryCursor::new();
+        let mut matches = cursor.matches(&q, root, src);
+        while let Some(m) = matches.next() {
+            if let Some(name) = cap_text(&m, name_idx, src) {
+                graph.insert_symbol(SymbolNode {
+                    name,
+                    kind: SymbolKind::EnumValue,
+                    value: cap_text_opt(&m, val_idx, src).map(|v| v.trim().to_string()),
+                    file: path.to_path_buf(),
+                    line: m
+                        .captures
+                        .iter()
+                        .find(|c| c.index == name_idx)
+                        .map_or(0, |c| c.node.start_position().row as u32 + 1),
+                });
+            }
+        }
+    }
+
+    Ok(())
+}
