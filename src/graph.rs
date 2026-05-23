@@ -55,6 +55,35 @@ impl SymbolKind {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub enum TypeKind {
+    Struct,
+    Union,
+    Enum,
+    Typedef,
+}
+
+impl TypeKind {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            TypeKind::Struct => "struct",
+            TypeKind::Union => "union",
+            TypeKind::Enum => "enum",
+            TypeKind::Typedef => "typedef",
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct TypeNode {
+    pub name: String,
+    pub kind: TypeKind,
+    /// Raw source of the full definition, trimmed to 500 chars
+    pub definition: String,
+    pub file: PathBuf,
+    pub line: u32,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct IncludeEdge {
     /// Raw path as written in source (e.g. "../config/sdk_config.h" or "nrf_sdh.h")
@@ -87,6 +116,8 @@ pub struct CallGraph {
     pub symbols: HashMap<String, Vec<SymbolNode>>,
     /// Include edges: file path → list of #include directives in that file
     pub includes: HashMap<PathBuf, Vec<IncludeEdge>>,
+    /// Type definitions: struct / union / enum / typedef, keyed by name
+    pub types: HashMap<String, Vec<TypeNode>>,
 }
 
 impl CallGraph {
@@ -112,6 +143,34 @@ impl CallGraph {
         self.macro_referenced.clear();
         self.symbols.clear();
         self.includes.clear();
+        self.types.clear();
+    }
+
+    pub fn insert_type(&mut self, node: TypeNode) {
+        self.types.entry(node.name.clone()).or_default().push(node);
+    }
+
+    pub fn find_type(&self, query: &str) -> Vec<&TypeNode> {
+        let q = query.to_lowercase();
+        let mut results: Vec<&TypeNode> = self
+            .types
+            .iter()
+            .filter(|(name, _)| name.to_lowercase().contains(&q))
+            .flat_map(|(_, nodes)| nodes.iter())
+            .collect();
+        results.sort_by(|a, b| a.name.cmp(&b.name).then(a.file.cmp(&b.file)));
+        results
+    }
+
+    /// Returns functions whose source text contains `type_name` as a whole word.
+    pub fn get_type_users(&self, type_name: &str) -> Vec<&FunctionNode> {
+        let mut results: Vec<&FunctionNode> = self
+            .nodes
+            .values()
+            .filter(|n| contains_word(&n.source, type_name))
+            .collect();
+        results.sort_by_key(|n| &n.name);
+        results
     }
 
     pub fn insert_symbol(&mut self, node: SymbolNode) {
@@ -318,4 +377,29 @@ impl CallGraph {
         ranked.truncate(n);
         ranked
     }
+}
+
+fn contains_word(text: &str, word: &str) -> bool {
+    let bytes = text.as_bytes();
+    let wbytes = word.as_bytes();
+    let wlen = wbytes.len();
+    if wlen == 0 {
+        return false;
+    }
+    let mut i = 0;
+    while i + wlen <= bytes.len() {
+        if &bytes[i..i + wlen] == wbytes {
+            let before_ok = i == 0 || !is_ident_byte(bytes[i - 1]);
+            let after_ok = i + wlen >= bytes.len() || !is_ident_byte(bytes[i + wlen]);
+            if before_ok && after_ok {
+                return true;
+            }
+        }
+        i += 1;
+    }
+    false
+}
+
+fn is_ident_byte(b: u8) -> bool {
+    b.is_ascii_alphanumeric() || b == b'_'
 }

@@ -54,6 +54,20 @@ pub struct FindInFileParams {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct FindTypeParams {
+    #[schemars(
+        description = "Type name substring to search for (case-insensitive). Matches struct, union, enum, and typedef names."
+    )]
+    pub name: String,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct GetTypeUsersParams {
+    #[schemars(description = "Exact type name to search for in function bodies (e.g. ble_evt_t)")]
+    pub name: String,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct GetIncludesParams {
     #[schemars(
         description = "Filename substring to match against indexed file paths (case-insensitive)"
@@ -364,6 +378,49 @@ impl CofeGraph {
             return format!("No functions found in files matching '{filename}'");
         }
         results.join("\n")
+    }
+
+    #[tool(
+        description = "Look up struct, union, enum, and typedef definitions by name (case-insensitive substring match)"
+    )]
+    async fn find_type(&self, params: Parameters<FindTypeParams>) -> String {
+        let Parameters(FindTypeParams { name }) = params;
+        let graph = self.graph.read().await;
+        let results = graph.find_type(&name);
+        if results.is_empty() {
+            return format!("No types matching '{name}'");
+        }
+        results
+            .iter()
+            .map(|t| {
+                format!(
+                    "[{}] {} @ {}:{}\n{}",
+                    t.kind.as_str(),
+                    t.name,
+                    t.file.display(),
+                    t.line,
+                    t.definition,
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n\n")
+    }
+
+    #[tool(
+        description = "Find all functions that reference a given type name in their source (exact word match)"
+    )]
+    async fn get_type_users(&self, params: Parameters<GetTypeUsersParams>) -> String {
+        let Parameters(GetTypeUsersParams { name }) = params;
+        let graph = self.graph.read().await;
+        let results = graph.get_type_users(&name);
+        if results.is_empty() {
+            return format!("No functions reference type '{name}'");
+        }
+        results
+            .iter()
+            .map(|n| format!("{} @ {}:{}", n.name, n.file.display(), n.line))
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 
     #[tool(description = "List all #include directives in files matching a filename substring")]
