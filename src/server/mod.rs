@@ -20,11 +20,12 @@ use tools::types::{FindTypeParams, GetTypeUsersParams};
 pub struct CofeGraph {
     graph: Arc<RwLock<CallGraph>>,
     project_path: PathBuf,
+    use_toon: bool,
     tool_router: ToolRouter<Self>,
 }
 
 impl CofeGraph {
-    pub fn new(path: PathBuf) -> Self {
+    pub fn new(path: PathBuf, use_toon: bool) -> Self {
         let graph = Arc::new(RwLock::new(CallGraph::default()));
         let g = Arc::clone(&graph);
         let p = path.clone();
@@ -34,7 +35,18 @@ impl CofeGraph {
         Self {
             graph,
             project_path: path,
+            use_toon,
             tool_router: Self::tool_router(),
+        }
+    }
+
+    fn fmt(&self, json: String) -> String {
+        if self.use_toon {
+            let v: serde_json::Value =
+                serde_json::from_str(&json).unwrap_or(serde_json::Value::Null);
+            toon_format::encode_default(&v).unwrap_or(json)
+        } else {
+            json
         }
     }
 }
@@ -43,51 +55,54 @@ impl CofeGraph {
 impl CofeGraph {
     #[tool(description = "Re-index the project directory (use when source files have changed)")]
     async fn index_project(&self) -> String {
-        tools::index::index_project(Arc::clone(&self.graph), &self.project_path).await
+        self.fmt(tools::index::index_project(Arc::clone(&self.graph), &self.project_path).await)
     }
 
     #[tool(description = "Search for functions by name (case-insensitive substring match)")]
     async fn find_function(&self, params: Parameters<FindFunctionParams>) -> String {
         let Parameters(p) = params;
-        tools::functions::find_function(&*self.graph.read().await, p)
+        self.fmt(tools::functions::find_function(
+            &*self.graph.read().await,
+            p,
+        ))
     }
 
     #[tool(description = "Get all functions that call the given function (BFS up to depth)")]
     async fn get_callers(&self, params: Parameters<TraverseParams>) -> String {
         let Parameters(p) = params;
-        tools::traverse::get_callers(&*self.graph.read().await, p)
+        self.fmt(tools::traverse::get_callers(&*self.graph.read().await, p))
     }
 
     #[tool(description = "Get all functions called by the given function (BFS up to depth)")]
     async fn get_callees(&self, params: Parameters<TraverseParams>) -> String {
         let Parameters(p) = params;
-        tools::traverse::get_callees(&*self.graph.read().await, p)
+        self.fmt(tools::traverse::get_callees(&*self.graph.read().await, p))
     }
 
     #[tool(description = "Get the source code of a function by exact name")]
     async fn get_source(&self, params: Parameters<GetSourceParams>) -> String {
         let Parameters(p) = params;
-        tools::functions::get_source(&*self.graph.read().await, p)
+        self.fmt(tools::functions::get_source(&*self.graph.read().await, p))
     }
 
     #[tool(description = "Find the shortest call path from one function to another")]
     async fn get_path(&self, params: Parameters<GetPathParams>) -> String {
         let Parameters(p) = params;
-        tools::traverse::get_path(&*self.graph.read().await, p)
+        self.fmt(tools::traverse::get_path(&*self.graph.read().await, p))
     }
 
     #[tool(
         description = "List functions that are never called (potential dead code), classified by likely reason"
     )]
     async fn find_dead_code(&self) -> String {
-        tools::analysis::find_dead_code(&*self.graph.read().await)
+        self.fmt(tools::analysis::find_dead_code(&*self.graph.read().await))
     }
 
     #[tool(
         description = "Show overall call graph statistics: function count, edge count, and top fan-in/fan-out functions"
     )]
     async fn get_stats(&self) -> String {
-        tools::analysis::get_stats(&*self.graph.read().await)
+        self.fmt(tools::analysis::get_stats(&*self.graph.read().await))
     }
 
     #[tool(
@@ -95,7 +110,10 @@ impl CofeGraph {
     )]
     async fn find_functions_in_file(&self, params: Parameters<FindInFileParams>) -> String {
         let Parameters(p) = params;
-        tools::functions::find_functions_in_file(&*self.graph.read().await, p)
+        self.fmt(tools::functions::find_functions_in_file(
+            &*self.graph.read().await,
+            p,
+        ))
     }
 
     #[tool(
@@ -103,7 +121,10 @@ impl CofeGraph {
     )]
     async fn get_public_api(&self, params: Parameters<FindInFileParams>) -> String {
         let Parameters(p) = params;
-        tools::functions::get_public_api(&*self.graph.read().await, p)
+        self.fmt(tools::functions::get_public_api(
+            &*self.graph.read().await,
+            p,
+        ))
     }
 
     #[tool(
@@ -111,7 +132,7 @@ impl CofeGraph {
     )]
     async fn get_globals(&self, params: Parameters<GetIncludesParams>) -> String {
         let Parameters(p) = params;
-        tools::globals::get_globals(&*self.graph.read().await, p)
+        self.fmt(tools::globals::get_globals(&*self.graph.read().await, p))
     }
 
     #[tool(
@@ -119,7 +140,10 @@ impl CofeGraph {
     )]
     async fn get_global_users(&self, params: Parameters<GetTypeUsersParams>) -> String {
         let Parameters(p) = params;
-        tools::globals::get_global_users(&*self.graph.read().await, p)
+        self.fmt(tools::globals::get_global_users(
+            &*self.graph.read().await,
+            p,
+        ))
     }
 
     #[tool(
@@ -127,7 +151,7 @@ impl CofeGraph {
     )]
     async fn get_fn_globals(&self, params: Parameters<GetSourceParams>) -> String {
         let Parameters(p) = params;
-        tools::globals::get_fn_globals(&*self.graph.read().await, p)
+        self.fmt(tools::globals::get_fn_globals(&*self.graph.read().await, p))
     }
 
     #[tool(
@@ -135,7 +159,7 @@ impl CofeGraph {
     )]
     async fn find_type(&self, params: Parameters<FindTypeParams>) -> String {
         let Parameters(p) = params;
-        tools::types::find_type(&*self.graph.read().await, p)
+        self.fmt(tools::types::find_type(&*self.graph.read().await, p))
     }
 
     #[tool(
@@ -143,13 +167,13 @@ impl CofeGraph {
     )]
     async fn get_type_users(&self, params: Parameters<GetTypeUsersParams>) -> String {
         let Parameters(p) = params;
-        tools::types::get_type_users(&*self.graph.read().await, p)
+        self.fmt(tools::types::get_type_users(&*self.graph.read().await, p))
     }
 
     #[tool(description = "List all #include directives in files matching a filename substring")]
     async fn get_includes(&self, params: Parameters<GetIncludesParams>) -> String {
         let Parameters(p) = params;
-        tools::includes::get_includes(&*self.graph.read().await, p)
+        self.fmt(tools::includes::get_includes(&*self.graph.read().await, p))
     }
 
     #[tool(
@@ -157,7 +181,7 @@ impl CofeGraph {
     )]
     async fn get_includers(&self, params: Parameters<GetIncludersParams>) -> String {
         let Parameters(p) = params;
-        tools::includes::get_includers(&*self.graph.read().await, p)
+        self.fmt(tools::includes::get_includers(&*self.graph.read().await, p))
     }
 
     #[tool(
@@ -165,7 +189,7 @@ impl CofeGraph {
     )]
     async fn find_symbol(&self, params: Parameters<FindSymbolParams>) -> String {
         let Parameters(p) = params;
-        tools::symbols::find_symbol(&*self.graph.read().await, p)
+        self.fmt(tools::symbols::find_symbol(&*self.graph.read().await, p))
     }
 
     #[tool(
@@ -173,7 +197,10 @@ impl CofeGraph {
     )]
     async fn find_high_fan_in(&self, params: Parameters<TopNParams>) -> String {
         let Parameters(p) = params;
-        tools::functions::find_high_fan_in(&*self.graph.read().await, p)
+        self.fmt(tools::functions::find_high_fan_in(
+            &*self.graph.read().await,
+            p,
+        ))
     }
 }
 

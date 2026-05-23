@@ -10,10 +10,12 @@ use std::path::PathBuf;
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let use_toon = args.contains(&"--toon".to_string());
     let path = PathBuf::from(
-        std::env::args()
-            .nth(1)
-            .expect("usage: cofe-graph <project-path>"),
+        args.iter()
+            .find(|a| !a.starts_with("--"))
+            .expect("usage: cofe-graph <project-path> [--toon]"),
     );
     anyhow::ensure!(
         path.is_dir(),
@@ -22,10 +24,13 @@ async fn main() -> Result<()> {
     );
 
     eprintln!(
-        "[cofe-graph] starting MCP server on stdio (project: {})",
-        path.display()
+        "[cofe-graph] starting MCP server on stdio (project: {}, format: {})",
+        path.display(),
+        if use_toon { "toon" } else { "json" },
     );
-    let service = CofeGraph::new(path).serve(rmcp::transport::stdio()).await?;
+    let service = CofeGraph::new(path, use_toon)
+        .serve(rmcp::transport::stdio())
+        .await?;
     service.waiting().await?;
     Ok(())
 }
