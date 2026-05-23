@@ -2,6 +2,7 @@ mod cache;
 mod graph;
 mod parser;
 mod server;
+pub mod tools;
 
 use anyhow::Result;
 use cache::COFE_DATA_DIR;
