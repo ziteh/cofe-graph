@@ -51,12 +51,12 @@ pub async fn index_project(
                     sources.push(src);
                 }
                 Err(e) => {
-                    eprintln!("[cofe-graph] parse error {:?}: {e}", p);
+                    tracing::warn!("parse error {:?}: {e}", p);
                     files_err += 1;
                 }
             },
             Err(e) => {
-                eprintln!("[cofe-graph] read error {:?}: {e}", p);
+                tracing::warn!("read error {:?}: {e}", p);
                 files_err += 1;
             }
         }
@@ -64,7 +64,7 @@ pub async fn index_project(
 
     for src in &sources {
         if let Err(e) = crate::parser::scan_macro_refs(src, &mut g) {
-            eprintln!("[cofe-graph] macro scan error: {e}");
+            tracing::warn!("macro scan error: {e}");
         }
     }
 
