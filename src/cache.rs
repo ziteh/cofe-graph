@@ -16,8 +16,7 @@ use std::process::Command;
 
 use crate::graph::CallGraph;
 
-const CACHE_DIR: &str = ".cofe-graph";
-pub const DEFAULT_MAX_CACHE_ENTRIES: usize = 15;
+pub const COFE_DATA_DIR: &str = ".cofe-graph";
 
 type HitMap = HashMap<String, u64>;
 
@@ -30,7 +29,7 @@ pub struct Cache {
 impl Cache {
     pub fn open(base: &Path, max_entries: usize) -> Option<Self> {
         let commit_hash = git_head(base)?;
-        let dir = base.join(CACHE_DIR);
+        let dir = base.join(COFE_DATA_DIR);
         std::fs::create_dir_all(&dir).ok()?;
         let gitignore = dir.join(".gitignore");
         if !gitignore.exists() {
