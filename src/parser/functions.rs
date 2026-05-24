@@ -10,6 +10,11 @@ const FUNCTION_DEF_QUERY: &str = r#"
   declarator: (function_declarator
     declarator: (identifier) @fn.name)
 ) @fn.def
+(function_definition
+  declarator: (pointer_declarator
+    declarator: (function_declarator
+      declarator: (identifier) @fn.name))
+) @fn.def
 "#;
 
 const CALL_EXPR_QUERY: &str = r#"
