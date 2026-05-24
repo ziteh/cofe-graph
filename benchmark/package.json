@@ -1,0 +1,21 @@
+{
+  "name": "cofe-graph-benchmark",
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "bench": "tsx bench.ts",
+    "judge": "tsx judge.ts"
+  },
+  "dependencies": {
+    "commander": "^12",
+    "dotenv": "^16",
+    "openai": "^4",
+    "seedrandom": "^3"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "@types/seedrandom": "^3",
+    "tsx": "^4",
+    "typescript": "^5"
+  }
+}

@@ -60,21 +60,26 @@ Measures response quality with vs. without cofe-graph as a RAG tool.
 
 Prerequisites:
 
-- Python 3.10+
-- Docker
+- Node.js 18+
 - cofe-graph binary: `cargo build --release`
+
+### Setup
+
+```bash
+cd benchmark && pnpm install
+```
 
 ### Run
 
 ```bash
-# Full pipeline — auto-creates .venv and installs deps on first run
-python benchmark/judge.py --run \
+# Full pipeline — run bench N times, auto-judge, summarise
+pnpm judge --run \
   --model gemma4:e4b --base-url http://localhost:11434/v1 \
   --judge-model gemma4:26b --judge-base-url http://localhost:11434/v1 \
-  --question Q1 Q15 --runs 2
+  --question Q1 Q2 --runs 2
 
 # Bench only (no judging)
-python benchmark/bench.py --model <model> --base-url <url>
+pnpm bench --model <model> --base-url <url>
 ```
 
 For OpenRouter, set `OPENROUTER_API_KEY` in `benchmark/.env` (copy from `benchmark/.env.example`).
