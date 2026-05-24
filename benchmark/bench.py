@@ -25,13 +25,24 @@ Examples:
 import os
 import sys
 
+if sys.version_info < (3, 10):
+    sys.exit(
+        f"[bench] Python 3.10+ required (found {sys.version_info.major}.{sys.version_info.minor}).\n"
+        "        Install a newer Python and retry."
+    )
+
+_IS_WIN = sys.platform == "win32"
+_VENV_BIN = "Scripts" if _IS_WIN else "bin"
+_PY_EXE = "python.exe" if _IS_WIN else "python"
+_PIP_EXE = "pip.exe" if _IS_WIN else "pip"
+
 
 def _bootstrap() -> None:
     if sys.prefix != sys.base_prefix:  # already inside a venv
         return
     here = os.path.dirname(os.path.abspath(__file__))
     venv = os.path.join(here, ".venv")
-    python = os.path.join(venv, "bin", "python")
+    python = os.path.join(venv, _VENV_BIN, _PY_EXE)
     if not os.path.isfile(python):
         import subprocess
 
@@ -41,9 +52,13 @@ def _bootstrap() -> None:
         if os.path.isfile(req):
             print("[bench] Installing dependencies ...", file=sys.stderr)
             subprocess.check_call(
-                [os.path.join(venv, "bin", "pip"), "install", "-q", "-r", req]
+                [os.path.join(venv, _VENV_BIN, _PIP_EXE), "install", "-q", "-r", req]
             )
-    os.execv(python, [python] + sys.argv)
+    # Use subprocess instead of os.execv for reliable cross-platform re-exec
+    import subprocess
+
+    result = subprocess.run([python] + sys.argv)
+    sys.exit(result.returncode)
 
 
 _bootstrap()
@@ -292,14 +307,24 @@ class DockerSandbox:
         self._shadow_dir = Path(tempfile.mkdtemp(prefix="bench_shadow_"))
         subprocess.run(
             [
-                "docker", "run", "-d", "--rm",
-                "--name", self._name,
-                "-v", f"{self.firmware_src}:{self.CONTAINER_ROOT}:ro",
+                "docker",
+                "run",
+                "-d",
+                "--rm",
+                "--name",
+                self._name,
+                "-v",
+                f"{self.firmware_src}:{self.CONTAINER_ROOT}:ro",
                 # Shadow any pre-existing .cofe-graph/ so the model cannot see it
-                "-v", f"{self._shadow_dir}:{self.CONTAINER_ROOT}/.cofe-graph:ro",
-                "-w", self.CONTAINER_ROOT,
-                "--network", "none",
-                self.IMAGE, "sleep", "infinity",
+                "-v",
+                f"{self._shadow_dir}:{self.CONTAINER_ROOT}/.cofe-graph:ro",
+                "-w",
+                self.CONTAINER_ROOT,
+                "--network",
+                "none",
+                self.IMAGE,
+                "sleep",
+                "infinity",
             ],
             check=True,
             capture_output=True,
@@ -351,9 +376,7 @@ def _execute_basic_tool(name: str, args: dict, sandbox: DockerSandbox) -> str:
 
     if name == "grep":
         pattern = args.get("pattern", "")
-        path = sandbox.to_container_path(
-            args.get("path", DockerSandbox.CONTAINER_ROOT)
-        )
+        path = sandbox.to_container_path(args.get("path", DockerSandbox.CONTAINER_ROOT))
         flags = args.get("flags", "-r -n")
         cmd = (
             f"grep --exclude-dir=.cofe-graph {flags} "
@@ -365,9 +388,7 @@ def _execute_basic_tool(name: str, args: dict, sandbox: DockerSandbox) -> str:
 
     if name == "glob":
         pattern = args.get("pattern", "")
-        base = sandbox.to_container_path(
-            args.get("path", DockerSandbox.CONTAINER_ROOT)
-        )
+        base = sandbox.to_container_path(args.get("path", DockerSandbox.CONTAINER_ROOT))
         name_pat = Path(pattern).name or "*"
         if "**" in pattern or "/" in pattern:
             cmd = f"find {shlex.quote(base)} -name {shlex.quote(name_pat)} | sort | head -200"
@@ -405,14 +426,15 @@ def find_cofe_bin(override: Optional[str]) -> Path:
         if not p.is_file():
             raise FileNotFoundError(f"cofe-graph binary not found: {p}")
         return p
+    exe = "cofe-graph.exe" if _IS_WIN else "cofe-graph"
     for candidate in [
-        REPO_ROOT / "target" / "release" / "cofe-graph",
-        REPO_ROOT / "target" / "debug" / "cofe-graph",
+        REPO_ROOT / "target" / "release" / exe,
+        REPO_ROOT / "target" / "debug" / exe,
     ]:
         if candidate.is_file():
             return candidate
     raise FileNotFoundError(
-        "cofe-graph binary not found. Run `cargo build --release` first."
+        "cofe-graph binary not found. Build it first:\n  cargo build --release"
     )
 
 
@@ -451,9 +473,12 @@ def _ensure_sandbox_image() -> None:
         dockerfile = SCRIPT_DIR / "Dockerfile.sandbox"
         subprocess.run(
             [
-                "docker", "build",
-                "-t", DockerSandbox.IMAGE,
-                "-f", str(dockerfile),
+                "docker",
+                "build",
+                "-t",
+                DockerSandbox.IMAGE,
+                "-f",
+                str(dockerfile),
                 str(SCRIPT_DIR),
             ],
             check=True,
@@ -496,7 +521,10 @@ async def run_without_rag(
                 total_in += resp.usage.prompt_tokens
                 total_out += resp.usage.completion_tokens
 
-            assistant_entry: dict[str, Any] = {"role": "assistant", "content": msg.content}
+            assistant_entry: dict[str, Any] = {
+                "role": "assistant",
+                "content": msg.content,
+            }
             if msg.tool_calls:
                 assistant_entry["tool_calls"] = [
                     {
@@ -617,7 +645,10 @@ async def run_with_mcp(
                         messages.append(assistant_entry)
 
                         if not msg.tool_calls:
-                            usage = {"input_tokens": total_in, "output_tokens": total_out}
+                            usage = {
+                                "input_tokens": total_in,
+                                "output_tokens": total_out,
+                            }
                             return msg.content or "", tool_calls_log, usage
 
                         for tc in msg.tool_calls:
@@ -629,7 +660,9 @@ async def run_with_mcp(
 
                             if fn_name in BASIC_TOOL_NAMES:
                                 print(f"    [fs ] {fn_name}({json.dumps(fn_args)})")
-                                result_text = _execute_basic_tool(fn_name, fn_args, sandbox)
+                                result_text = _execute_basic_tool(
+                                    fn_name, fn_args, sandbox
+                                )
                             else:
                                 print(f"    [mcp] {fn_name}({json.dumps(fn_args)})")
                                 try:

@@ -53,3 +53,30 @@ Opens a browser UI where you can call tools interactively.
 ```bash
 cargo test --test e2e
 ```
+
+## Benchmark
+
+Measures response quality with vs. without cofe-graph as a RAG tool.
+
+Prerequisites:
+
+- Python 3.10+
+- Docker
+- cofe-graph binary: `cargo build --release`
+
+### Run
+
+```bash
+# Full pipeline — auto-creates .venv and installs deps on first run
+python benchmark/judge.py --run \
+  --model gemma4:e4b --base-url http://localhost:11434/v1 \
+  --judge-model gemma4:26b --judge-base-url http://localhost:11434/v1 \
+  --question Q1 Q15 --runs 2
+
+# Bench only (no judging)
+python benchmark/bench.py --model <model> --base-url <url>
+```
+
+For OpenRouter, set `OPENROUTER_API_KEY` in `benchmark/.env` (copy from `benchmark/.env.example`).
+
+Results are saved to `benchmark/results/<timestamp>/`.
