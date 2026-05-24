@@ -13,7 +13,7 @@ use crate::tools::annotate::{AnnotateFileParams, FileContextParams, FilePathPara
 use crate::tools::functions::{FindFunctionParams, FindInFileParams, GetSourceParams, TopNParams};
 use crate::tools::includes::{GetIncludersParams, GetIncludesParams};
 use crate::tools::symbols::FindSymbolParams;
-use crate::tools::traverse::{GetPathParams, TraverseParams};
+use crate::tools::traverse::{CalleesParams, CallersParams, GetPathParams};
 use crate::tools::types::{FindTypeParams, GetTypeUsersParams};
 
 #[derive(Clone)]
@@ -83,8 +83,10 @@ impl CofeGraph {
         ))
     }
 
-    #[tool(description = "Get all functions that call the given function (BFS up to depth)")]
-    async fn get_callers(&self, params: Parameters<TraverseParams>) -> CallToolResult {
+    #[tool(
+        description = "Get all functions that call the given functions (BFS up to depth). Pass multiple names to batch related lookups into one call."
+    )]
+    async fn get_callers(&self, params: Parameters<CallersParams>) -> CallToolResult {
         let Parameters(p) = params;
         self.call_result(crate::tools::traverse::get_callers(
             &*self.graph.read().await,
@@ -92,8 +94,10 @@ impl CofeGraph {
         ))
     }
 
-    #[tool(description = "Get all functions called by the given function (BFS up to depth)")]
-    async fn get_callees(&self, params: Parameters<TraverseParams>) -> CallToolResult {
+    #[tool(
+        description = "Get all functions called by the given functions (BFS up to depth). Pass multiple names to batch related lookups into one call."
+    )]
+    async fn get_callees(&self, params: Parameters<CalleesParams>) -> CallToolResult {
         let Parameters(p) = params;
         self.call_result(crate::tools::traverse::get_callees(
             &*self.graph.read().await,
