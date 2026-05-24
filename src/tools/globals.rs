@@ -2,11 +2,15 @@ use serde_json::{Value, json};
 
 use super::functions::GetSourceParams;
 use super::includes::GetIncludesParams;
-use super::short_file;
+use super::rel_file;
 use super::types::GetTypeUsersParams;
 use crate::graph::CallGraph;
 
-pub fn get_globals(graph: &CallGraph, params: GetIncludesParams) -> Result<Value, String> {
+pub fn get_globals(
+    graph: &CallGraph,
+    root: &std::path::Path,
+    params: GetIncludesParams,
+) -> Result<Value, String> {
     let GetIncludesParams { file } = params;
     let results = graph.find_globals(&file);
     if results.is_empty() {
@@ -19,7 +23,7 @@ pub fn get_globals(graph: &CallGraph, params: GetIncludesParams) -> Result<Value
         .map(|v| {
             let mut obj = serde_json::Map::new();
             obj.insert("name".into(), json!(v.name));
-            obj.insert("file".into(), json!(short_file(&v.file)));
+            obj.insert("file".into(), json!(rel_file(root, &v.file)));
             obj.insert("line".into(), json!(v.line));
             obj.insert("decl".into(), json!(v.decl));
             obj.insert("static".into(), json!(v.is_static));
@@ -32,7 +36,11 @@ pub fn get_globals(graph: &CallGraph, params: GetIncludesParams) -> Result<Value
     Ok(json!(matches))
 }
 
-pub fn get_global_users(graph: &CallGraph, params: GetTypeUsersParams) -> Result<Value, String> {
+pub fn get_global_users(
+    graph: &CallGraph,
+    root: &std::path::Path,
+    params: GetTypeUsersParams,
+) -> Result<Value, String> {
     let GetTypeUsersParams { name } = params;
     let results = graph.get_global_users(&name);
     if results.is_empty() {
@@ -43,7 +51,7 @@ pub fn get_global_users(graph: &CallGraph, params: GetTypeUsersParams) -> Result
         .map(|n| {
             let mut obj = serde_json::Map::new();
             obj.insert("name".into(), json!(n.name));
-            obj.insert("file".into(), json!(short_file(&n.file)));
+            obj.insert("file".into(), json!(rel_file(root, &n.file)));
             obj.insert("line".into(), json!(n.line));
             obj.insert("static".into(), json!(n.is_static));
             Value::Object(obj)
@@ -52,7 +60,11 @@ pub fn get_global_users(graph: &CallGraph, params: GetTypeUsersParams) -> Result
     Ok(json!(users))
 }
 
-pub fn get_fn_globals(graph: &CallGraph, params: GetSourceParams) -> Result<Value, String> {
+pub fn get_fn_globals(
+    graph: &CallGraph,
+    root: &std::path::Path,
+    params: GetSourceParams,
+) -> Result<Value, String> {
     let GetSourceParams { name } = params;
     let results = graph.get_fn_globals(&name);
     if results.is_empty() {
@@ -68,7 +80,7 @@ pub fn get_fn_globals(graph: &CallGraph, params: GetSourceParams) -> Result<Valu
         .map(|v| {
             let mut obj = serde_json::Map::new();
             obj.insert("name".into(), json!(v.name));
-            obj.insert("file".into(), json!(short_file(&v.file)));
+            obj.insert("file".into(), json!(rel_file(root, &v.file)));
             obj.insert("line".into(), json!(v.line));
             obj.insert("static".into(), json!(v.is_static));
             Value::Object(obj)

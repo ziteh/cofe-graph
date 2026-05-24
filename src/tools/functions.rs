@@ -4,7 +4,7 @@ use rmcp::schemars;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use super::short_file;
+use super::rel_file;
 use crate::graph::CallGraph;
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
@@ -31,10 +31,10 @@ pub struct TopNParams {
     pub top_n: Option<u32>,
 }
 
-fn fn_entry(n: &crate::graph::FunctionNode) -> Value {
+fn fn_entry(n: &crate::graph::FunctionNode, root: &std::path::Path) -> Value {
     let mut obj = serde_json::Map::new();
     obj.insert("name".into(), json!(n.name));
-    obj.insert("file".into(), json!(short_file(&n.file)));
+    obj.insert("file".into(), json!(rel_file(root, &n.file)));
     obj.insert("line".into(), json!(n.line));
     obj.insert("static".into(), json!(n.is_static));
     if !n.conditions.is_empty() {
@@ -54,7 +54,11 @@ fn compact_fn_entry(n: &crate::graph::FunctionNode) -> Value {
     Value::Object(obj)
 }
 
-pub fn find_function(graph: &CallGraph, params: FindFunctionParams) -> Result<Value, String> {
+pub fn find_function(
+    graph: &CallGraph,
+    root: &std::path::Path,
+    params: FindFunctionParams,
+) -> Result<Value, String> {
     let FindFunctionParams { name } = params;
     let mut results: Vec<_> = graph.find_function(&name).into_iter().collect();
     results.sort_by_key(|n| &n.name);
@@ -62,7 +66,10 @@ pub fn find_function(graph: &CallGraph, params: FindFunctionParams) -> Result<Va
         return Err(format!("No functions matching '{name}'"));
     }
     Ok(json!(
-        results.iter().map(|n| fn_entry(n)).collect::<Vec<_>>()
+        results
+            .iter()
+            .map(|n| fn_entry(n, root))
+            .collect::<Vec<_>>()
     ))
 }
 

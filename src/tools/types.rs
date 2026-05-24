@@ -2,7 +2,7 @@ use rmcp::schemars;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use super::short_file;
+use super::rel_file;
 use crate::graph::CallGraph;
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
@@ -43,7 +43,11 @@ pub fn find_type(graph: &CallGraph, params: FindTypeParams) -> Result<Value, Str
     Ok(json!(matches))
 }
 
-pub fn get_type_users(graph: &CallGraph, params: GetTypeUsersParams) -> Result<Value, String> {
+pub fn get_type_users(
+    graph: &CallGraph,
+    root: &std::path::Path,
+    params: GetTypeUsersParams,
+) -> Result<Value, String> {
     let GetTypeUsersParams { name } = params;
     let results = graph.get_type_users(&name);
     if results.is_empty() {
@@ -54,7 +58,7 @@ pub fn get_type_users(graph: &CallGraph, params: GetTypeUsersParams) -> Result<V
         .map(|n| {
             let mut obj = serde_json::Map::new();
             obj.insert("name".into(), json!(n.name));
-            obj.insert("file".into(), json!(short_file(&n.file)));
+            obj.insert("file".into(), json!(rel_file(root, &n.file)));
             obj.insert("line".into(), json!(n.line));
             obj.insert("static".into(), json!(n.is_static));
             Value::Object(obj)

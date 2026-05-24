@@ -79,6 +79,7 @@ impl CofeGraph {
         let Parameters(p) = params;
         self.call_result(crate::tools::functions::find_function(
             &*self.graph.read().await,
+            &self.project_path,
             p,
         ))
     }
@@ -168,6 +169,7 @@ impl CofeGraph {
         let Parameters(p) = params;
         self.call_result(crate::tools::globals::get_globals(
             &*self.graph.read().await,
+            &self.project_path,
             p,
         ))
     }
@@ -179,6 +181,7 @@ impl CofeGraph {
         let Parameters(p) = params;
         self.call_result(crate::tools::globals::get_global_users(
             &*self.graph.read().await,
+            &self.project_path,
             p,
         ))
     }
@@ -190,6 +193,7 @@ impl CofeGraph {
         let Parameters(p) = params;
         self.call_result(crate::tools::globals::get_fn_globals(
             &*self.graph.read().await,
+            &self.project_path,
             p,
         ))
     }
@@ -209,6 +213,7 @@ impl CofeGraph {
         let Parameters(p) = params;
         self.call_result(crate::tools::types::get_type_users(
             &*self.graph.read().await,
+            &self.project_path,
             p,
         ))
     }
