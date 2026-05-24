@@ -1,47 +1,76 @@
 #!/usr/bin/env python3
 """Q1 benchmark: with vs without cofe-graph. Dirty MVP."""
 
-import argparse, json, subprocess, time, re
+import argparse, json, subprocess, sys, time, re
+from typing import Any
 from openai import OpenAI
 from pathlib import Path
 
-BINARY    = "/Users/klein/ws/cofe-graph/target/release/cofe-graph"
-INDEX_DIR = "/Users/klein/ws/cofe-graph/tests/nRF5_SDK_17.1.0_ddde560/examples/ble_peripheral/ble_app_hids_keyboard"
-MAIN_C    = INDEX_DIR + "/main.c"
-RESULTS   = Path(__file__).parent / "results"
+_HERE     = Path(__file__).parent.resolve()
+_IS_WIN   = sys.platform == "win32"
+_EXE      = "cofe-graph.exe" if _IS_WIN else "cofe-graph"
+
+# Paths: auto-detect relative to bench.py location, or override via --binary / --index-dir
+_DEFAULT_BINARY    = _HERE.parent / "target" / ("x86_64-pc-windows-gnu/release" if _IS_WIN else "release") / _EXE
+_DEFAULT_INDEX_DIR = _HERE.parent / "tests/stm32mp1-baremetal-master/examples/usb_msc_device"
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--model", default="qwen2.5:7b")
-parser.add_argument("--base-url", default="http://localhost:11434/v1")
-parser.add_argument("--api-key", default="ollama")
+parser.add_argument("--model",     default="gemma4:e4b")
+parser.add_argument("--base-url",  default="http://localhost:11434/v1")
+parser.add_argument("--api-key",   default="ollama")
+parser.add_argument("--binary",    default=str(_DEFAULT_BINARY))
+parser.add_argument("--index-dir", default=str(_DEFAULT_INDEX_DIR))
 ARGS = parser.parse_args()
-MODEL = ARGS.model
 
-Q1 = (
-    "Trace the complete call chain from when BSP_EVENT_KEY_0 is triggered "
-    "(button press) to when a BLE HID keyboard report is actually transmitted. "
-    "List every function in the chain in order, with a one-line description of each."
+MODEL     = ARGS.model
+BINARY    = ARGS.binary
+INDEX_DIR = ARGS.index_dir
+INDEX_PATH = Path(INDEX_DIR)
+RUN_ID    = time.strftime("%Y%m%d_%H%M%S")
+RESULTS   = _HERE / "results" / f"{RUN_ID}_{MODEL.replace('/', '_').replace(':', '-')}"
+
+_SOURCES_DESC = (
+    "The codebase has 4 source files: "
+    "main.cc (65 lines, USB init + LED loop), "
+    "usbd_conf.c (455 lines, HAL PCD callbacks bridging hardware interrupts to the USB stack), "
+    "usbd_desc.c (255 lines, USB descriptors), "
+    "usbd_msc_storage.c (164 lines, virtual RAM-disk storage backend)."
 )
 
+Q1 = (
+    "The global `USBD_MSC_fops` connects the storage backend to the USB MSC class. "
+    "Without assuming which file to look in: "
+    "(1) which source file defines `USBD_MSC_fops`, "
+    "(2) which source file passes it to the USB stack for registration, "
+    "(3) list the storage operation function names it exposes."
+)
+
+# Reference answer for Q1 correctness scoring (names that must appear in the answer)
+Q1_REFERENCE = [
+    "usbd_msc_storage",
+    "main",
+    "STORAGE_Init",
+    "STORAGE_Read",
+    "STORAGE_Write",
+]
+
 SYSTEM_WITHOUT = (
-    f"You are analyzing BLE HID keyboard firmware. "
-    f"The main source file is {MAIN_C} (1606 lines, ~50 static functions). "
+    f"You are analyzing STM32MP1 USB Mass Storage Device bare-metal firmware. "
+    f"{_SOURCES_DESC} "
     "You have NO prior knowledge of this code. "
     "Use read_file and grep_file to find the answer. "
-    "You MUST read the actual source code of each function in the chain. "
-    "Do NOT guess function names — grep to verify each one exists. "
+    "You will need to search across multiple source files — do not assume which file. "
     "Give your final answer only after reading the code."
 )
 
 SYSTEM_WITH = (
-    f"You are analyzing BLE HID keyboard firmware. "
-    f"The main source file is {MAIN_C} (1606 lines, ~50 static functions). "
-    "You have access to a pre-built call graph. "
-    "To trace a call chain: use get_callees(name, depth=3) on the entry-point function. "
-    "To find the entry point first: use find_function or grep. "
-    "Use get_source to verify the source of any function. "
+    f"You are analyzing STM32MP1 USB Mass Storage Device bare-metal firmware. "
+    f"{_SOURCES_DESC} "
+    "You have access to a pre-built call graph and global variable index. "
+    "Key tools: get_global_users('name') finds every function in any file that references "
+    "a global variable; get_globals('filename') lists globals defined in a file. "
     "Do NOT guess — use the tools to get exact data. "
-    "Give your final answer only after traversing the actual call graph."
+    "Give your final answer only after querying the actual call graph."
 )
 
 # ── MCP client ────────────────────────────────────────────────────────────────
@@ -49,12 +78,12 @@ class MCPClient:
     def __init__(self):
         self._id = 0
         self._proc = subprocess.Popen(
-            [BINARY, INDEX_DIR, "--quiet"],
+            [BINARY, INDEX_DIR, "--quiet", "--toon"],
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
         )
         self._handshake()
         print("  [mcp] warming up (waiting for index)...", flush=True)
-        self.call("find_functions_in_file", {"filename": "main.c"})
+        self.call("find_functions_in_file", {"filename": "main"})
         print("  [mcp] ready", flush=True)
 
     def _send(self, obj):
@@ -89,35 +118,64 @@ class MCPClient:
         self._proc.wait(timeout=5)
 
 # ── WITHOUT tools (raw file) ───────────────────────────────────────────────
-def _read_file(path, offset=1, limit=100):
-    lines = open(MAIN_C).readlines()
+_VALID_EXTS = {".c", ".cc", ".cpp", ".h", ".hpp"}
+
+def _resolve_path(path: str) -> Path:
+    """Resolve path to an allowed source file within INDEX_DIR."""
+    p = Path(path)
+    if not p.is_absolute():
+        p = INDEX_PATH / p
+    p = p.resolve()
+    if not str(p).startswith(str(INDEX_PATH.resolve())):
+        raise ValueError(f"path outside index dir: {path}")
+    if p.suffix not in _VALID_EXTS:
+        raise ValueError(f"not a source file: {path}")
+    return p
+
+def _read_file(path: str, offset: int = 1, limit: int = 100):
+    try:
+        lines = _resolve_path(path).read_text().splitlines(keepends=True)
+    except (ValueError, FileNotFoundError) as e:
+        return f"error: {e}"
     s = max(0, int(offset) - 1)
     e = s + min(int(limit), 300)
-    return "".join(f"{s+i+1}: {l}" for i, l in enumerate(lines[s:e]))
+    return "".join(f"{s+i+1}: {ln}" for i, ln in enumerate(lines[s:e]))
 
-def _grep_file(path, pattern):
+def _grep_file(path: str, pattern: str):
     try:
         rx = re.compile(pattern, re.IGNORECASE)
     except re.error:
         return f"bad regex: {pattern}"
-    lines = open(MAIN_C).readlines()
-    hits = [f"{i+1}: {l.rstrip()}" for i, l in enumerate(lines) if rx.search(l)]
+    try:
+        lines = _resolve_path(path).read_text().splitlines()
+    except (ValueError, FileNotFoundError) as e:
+        return f"error: {e}"
+    hits = [f"{i+1}: {ln}" for i, ln in enumerate(lines) if rx.search(ln)]
     return "\n".join(hits[:80]) or "no matches"
+
+_FILES_HINT = "filename relative to index dir, e.g. usbd_conf.c or main.cc"
 
 WITHOUT_TOOLS = [
     {"type": "function", "function": {
         "name": "read_file",
-        "description": "Read lines from main.c. Use offset+limit to navigate the 1606-line file.",
+        "description": (
+            "Read lines from a source file. Available files: main.cc, usbd_conf.c, "
+            "usbd_desc.c, usbd_msc_storage.c (and their headers). "
+            "Use offset+limit to navigate large files."
+        ),
         "parameters": {"type": "object", "properties": {
-            "path":   {"type": "string", "description": f"use {MAIN_C}"},
+            "path":   {"type": "string", "description": _FILES_HINT},
             "offset": {"type": "integer", "description": "1-based start line"},
             "limit":  {"type": "integer", "description": "lines to read (max 300)"},
         }, "required": ["path"]}}},
     {"type": "function", "function": {
         "name": "grep_file",
-        "description": "Regex search in main.c. Returns matching lines with line numbers.",
+        "description": (
+            "Regex search in a source file. Returns matching lines with line numbers. "
+            "Available files: main.cc, usbd_conf.c, usbd_desc.c, usbd_msc_storage.c."
+        ),
         "parameters": {"type": "object", "properties": {
-            "path":    {"type": "string", "description": f"use {MAIN_C}"},
+            "path":    {"type": "string", "description": _FILES_HINT},
             "pattern": {"type": "string"},
         }, "required": ["path", "pattern"]}}},
 ]
@@ -157,8 +215,10 @@ def run_agent(question, tools, dispatch_fn, system_prompt):
     ]
     n_calls = in_tok = out_tok = 0
     t0 = time.time()
+    turns_log = []   # full structured log for analysis
 
     for turn in range(20):
+        t_turn = time.time()
         for attempt in range(5):
             try:
                 resp = client.chat.completions.create(
@@ -170,7 +230,6 @@ def run_agent(question, tools, dispatch_fn, system_prompt):
             except Exception as e:
                 wait = 30
                 try:
-                    import json as _j
                     wait = e.response.json()["error"]["metadata"].get("retry_after_seconds", 30)
                 except Exception:
                     pass
@@ -178,14 +237,26 @@ def run_agent(question, tools, dispatch_fn, system_prompt):
                 time.sleep(float(wait) + 1)
         else:
             raise RuntimeError("max retries exceeded")
-        if resp.usage:
-            in_tok  += resp.usage.prompt_tokens or 0
-            out_tok += resp.usage.completion_tokens or 0
+
+        turn_in  = resp.usage.prompt_tokens     if resp.usage else 0
+        turn_out = resp.usage.completion_tokens if resp.usage else 0
+        in_tok  += turn_in
+        out_tok += turn_out
 
         choice = resp.choices[0]
         msg    = choice.message
         print(f"  turn {turn+1}: finish={choice.finish_reason!r}  "
               f"tool_calls={len(msg.tool_calls or [])}", flush=True)
+
+        turn_entry = {
+            "turn":          turn + 1,
+            "finish_reason": choice.finish_reason,
+            "input_tokens":  turn_in,
+            "output_tokens": turn_out,
+            "elapsed_sec":   round(time.time() - t_turn, 2),
+            "assistant_text": msg.content or "",
+            "tool_calls":    [],
+        }
 
         if choice.finish_reason == "tool_calls" and msg.tool_calls:
             messages.append(msg)
@@ -193,22 +264,34 @@ def run_agent(question, tools, dispatch_fn, system_prompt):
                 n_calls += 1
                 args = json.loads(tc.function.arguments)
                 print(f"    -> {tc.function.name}({json.dumps(args)[:100]})", flush=True)
+                t_tool = time.time()
                 result = dispatch_fn(tc.function.name, args)
                 result_str = result if isinstance(result, str) else json.dumps(result)
-                print(f"       {result_str[:120]!r}", flush=True)
+                tool_elapsed = round(time.time() - t_tool, 3)
+                print(f"       {result_str[:120]!r}  ({tool_elapsed}s)", flush=True)
                 messages.append({"role": "tool", "tool_call_id": tc.id, "content": result_str})
+                turn_entry["tool_calls"].append({
+                    "name":        tc.function.name,
+                    "args":        args,
+                    "result":      result_str,
+                    "elapsed_sec": tool_elapsed,
+                })
+            turns_log.append(turn_entry)
         else:
             answer = msg.content or ""
+            turns_log.append(turn_entry)
             break
     else:
         answer = "MAX_TURNS exceeded"
 
     return {
+        "model":         MODEL,
         "answer":        answer,
         "tool_calls":    n_calls,
         "input_tokens":  in_tok,
         "output_tokens": out_tok,
         "elapsed_sec":   round(time.time() - t0, 2),
+        "turns":         turns_log,
     }
 
 # ── main ───────────────────────────────────────────────────────────────────
@@ -231,6 +314,20 @@ def main():
     (RESULTS / "with" / "Q1_with.json").write_text(json.dumps(r_w, indent=2))
     print(f"  => {r_w['tool_calls']} calls  {r_w['elapsed_sec']}s")
 
+    # ── correctness scoring ───────────────────────────────────────────────
+    def score(result: Any) -> str:
+        answer = str(result.get("answer", "")).lower().replace("\\_", "_")
+        hits = sum(1 for fn in Q1_REFERENCE if fn.lower() in answer)
+        return f"{hits}/{len(Q1_REFERENCE)}"
+
+    wo_score = score(r_wo)
+    w_score  = score(r_w)
+    r_wo["correctness"] = wo_score
+    r_w["correctness"]  = w_score
+    # re-save with correctness included
+    (RESULTS / "without" / "Q1_without.json").write_text(json.dumps(r_wo, indent=2))
+    (RESULTS / "with"    / "Q1_with.json").write_text(json.dumps(r_w, indent=2))
+
     # ── summary ──────────────────────────────────────────────────────────
     W  = r_wo
     WW = r_w
@@ -241,6 +338,7 @@ def main():
     print(f"  {'Tool calls':<20} {W['tool_calls']:>18} {WW['tool_calls']:>18}")
     print(f"  {'Tokens (in+out)':<20} {W['input_tokens']+W['output_tokens']:>18} {WW['input_tokens']+WW['output_tokens']:>18}")
     print(f"  {'Elapsed (s)':<20} {W['elapsed_sec']:>18} {WW['elapsed_sec']:>18}")
+    print(f"  {'Correctness (Q1)':<20} {wo_score:>18} {w_score:>18}")
     print("=" * 64)
     print()
     print("── WITHOUT answer " + "─" * 44)
