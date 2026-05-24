@@ -1,3 +1,4 @@
+use rayon::prelude::*;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -11,15 +12,30 @@ use crate::graph::CallGraph;
 /// Parse `(path, source)` pairs into the graph.
 /// Returns `(files_ok, files_err)`.
 fn parse_sources_into_graph(g: &mut CallGraph, sources: &[(&Path, &str)]) -> (usize, usize) {
+    let start = std::time::Instant::now();
+
+    // Phase 1: parse files in parallel into isolated local graphs
+    let phase1_start = std::time::Instant::now();
+    let results: Vec<(&Path, &str, anyhow::Result<CallGraph>)> = sources
+        .par_iter()
+        .map(|&(path, src)| {
+            let mut local = CallGraph::default();
+            let res = crate::parser::parse_file(path, src, &mut local).map(|_| local);
+            (path, src, res)
+        })
+        .collect();
+    let phase1_elapsed = phase1_start.elapsed();
+
     let mut files_ok = 0usize;
     let mut files_err = 0usize;
-    let mut raw_sources: Vec<&str> = Vec::new();
+    let mut ok_sources: Vec<&str> = Vec::new();
 
-    for &(path, src) in sources {
-        match crate::parser::parse_file(path, src, g) {
-            Ok(_) => {
+    for (path, src, res) in results {
+        match res {
+            Ok(local) => {
+                g.merge(local);
                 files_ok += 1;
-                raw_sources.push(src);
+                ok_sources.push(src);
             }
             Err(e) => {
                 tracing::warn!("parse error {:?}: {e}", path);
@@ -28,11 +44,33 @@ fn parse_sources_into_graph(g: &mut CallGraph, sources: &[(&Path, &str)]) -> (us
         }
     }
 
-    for src in &raw_sources {
-        if let Err(e) = crate::parser::scan_macro_refs(src, g) {
-            tracing::warn!("macro scan error: {e}");
-        }
-    }
+    // Phase 2: scan macro refs in parallel (read-only on g.nodes)
+    let phase2_start = std::time::Instant::now();
+    let macro_refs: Vec<std::collections::HashSet<String>> = {
+        let nodes = &g.nodes;
+        ok_sources
+            .par_iter()
+            .filter_map(|src| {
+                crate::parser::collect_macro_refs(src, nodes)
+                    .map_err(|e| tracing::warn!("macro scan error: {e}"))
+                    .ok()
+            })
+            .collect()
+    };
+    let phase2_elapsed = phase2_start.elapsed();
+
+    g.macro_referenced.extend(macro_refs.into_iter().flatten());
+
+    let total_elapsed = start.elapsed();
+    tracing::info!(
+        files_ok,
+        files_err,
+        functions = g.nodes.len(),
+        phase1_ms = phase1_elapsed.as_millis(),
+        phase2_ms = phase2_elapsed.as_millis(),
+        total_ms = total_elapsed.as_millis(),
+        "parse_sources_into_graph completed"
+    );
 
     (files_ok, files_err)
 }

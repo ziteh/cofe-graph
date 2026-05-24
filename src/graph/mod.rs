@@ -53,6 +53,27 @@ impl CallGraph {
         self.globals.clear();
     }
 
+    pub fn merge(&mut self, other: CallGraph) {
+        self.nodes.extend(other.nodes);
+        for (k, v) in other.callees {
+            self.callees.entry(k).or_default().extend(v);
+        }
+        for (k, v) in other.callers {
+            self.callers.entry(k).or_default().extend(v);
+        }
+        for (k, v) in other.symbols {
+            self.symbols.entry(k).or_default().extend(v);
+        }
+        for (k, v) in other.includes {
+            self.includes.entry(k).or_default().extend(v);
+        }
+        for (k, v) in other.types {
+            self.types.entry(k).or_default().extend(v);
+        }
+        self.globals.extend(other.globals);
+        self.macro_referenced.extend(other.macro_referenced);
+    }
+
     pub fn insert_global(&mut self, var: GlobalVar) {
         self.globals.insert(var.name.clone(), var);
     }

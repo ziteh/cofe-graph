@@ -44,7 +44,7 @@ pub fn get_callers(graph: &CallGraph, params: CallersParams) -> Result<Value, St
         }
     }
     if result.is_empty() {
-        return Err(format!("No callers found for any of the given functions"));
+        return Err("No callers found for any of the given functions".to_string());
     }
     Ok(Value::Object(result))
 }
@@ -61,7 +61,7 @@ pub fn get_callees(graph: &CallGraph, params: CalleesParams) -> Result<Value, St
         }
     }
     if result.is_empty() {
-        return Err(format!("No callees found for any of the given functions"));
+        return Err("No callees found for any of the given functions".to_string());
     }
     Ok(Value::Object(result))
 }
