@@ -32,6 +32,8 @@ import { fileURLToPath } from "node:url";
 import { Command } from "commander";
 import seedrandom from "seedrandom";
 import OpenAI from "openai";
+import * as Plot from "@observablehq/plot";
+import { JSDOM } from "jsdom";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -63,6 +65,23 @@ interface StatsEntry {
   output_tokens: number;
   num_tool_calls: number;
   duration_sec: number;
+}
+
+interface ChartRow {
+  task: string;
+  condition: string;
+  total: number;
+  max: number;
+  pct: number;
+}
+
+interface CondStats {
+  condition: string;
+  score_pct: number;
+  in_tok: number;
+  out_tok: number;
+  tools: number;
+  secs: number;
 }
 
 interface LabeledEntry {
@@ -456,6 +475,78 @@ function cmdGenerate(resultDirs: string[], outDir: string, seed: number): void {
   console.log(`  3. Run:    pnpm judge --summary ${outDir}`);
 }
 
+function renderPlot(title: string, spec: Plot.PlotOptions): string {
+  const { document } = new JSDOM("").window;
+  // Strip options that cause Plot to wrap output in <figure> (title, caption, legend).
+  // color.legend in particular forces an HTML legend div which can't live in SVG.
+  const { title: _t, subtitle: _s, caption: _c, color: colorOpt, ...rest } = spec as Plot.PlotOptions & { subtitle?: string; caption?: string };
+  const sanitizedColor = colorOpt ? { ...colorOpt, legend: false } : undefined;
+  const plotSpec = { ...rest, ...(sanitizedColor ? { color: sanitizedColor } : {}), style: { background: "white" }, document };
+  const el = Plot.plot(plotSpec as Plot.PlotOptions & { document: Document });
+  const svg = el as unknown as SVGSVGElement;
+  (svg as unknown as Element).setAttribute("xmlns", "http://www.w3.org/2000/svg");
+  const titleEl = document.createElementNS("http://www.w3.org/2000/svg", "title");
+  titleEl.textContent = title;
+  svg.prepend(titleEl);
+  return '<?xml version="1.0" encoding="utf-8"?>\n' + svg.outerHTML;
+}
+
+function generateCharts(judgeDir: string, chartRows: ChartRow[], condStats: CondStats[]): void {
+  // Chart 1: per-task score % faceted by task, condition on x-axis (no HTML legend needed)
+  const scoresSvg = renderPlot("Score % by task and condition", {
+    width: 800,
+    height: 360,
+    fx: { label: "Task" },
+    x: { label: "Condition" },
+    y: { label: "Score (%)", domain: [0, 100], grid: true },
+    color: { legend: false },
+    marks: [
+      Plot.barY(chartRows, Plot.groupX({ y: "mean" }, {
+        fx: "task",
+        x: "condition",
+        y: "pct",
+        fill: "condition",
+        tip: true,
+      })),
+      Plot.ruleY([0]),
+    ],
+  });
+
+  // Chart 2: condition stats faceted by metric, condition on x-axis
+  const statRows: { condition: string; metric: string; value: number }[] = [];
+  for (const s of condStats) {
+    statRows.push(
+      { condition: s.condition, metric: "score %", value: s.score_pct },
+      { condition: s.condition, metric: "tools", value: s.tools },
+      { condition: s.condition, metric: "time (s)", value: s.secs },
+    );
+  }
+
+  const statsSvg = renderPlot("Condition stats comparison", {
+    width: 800,
+    height: 360,
+    fx: { label: "Metric" },
+    x: { label: "Condition" },
+    y: { label: "Value", grid: true },
+    color: { legend: false },
+    marks: [
+      Plot.barY(statRows, {
+        fx: "metric",
+        x: "condition",
+        y: "value",
+        fill: "condition",
+        tip: true,
+      }),
+      Plot.ruleY([0]),
+    ],
+  });
+
+  writeFileSync(join(judgeDir, "chart_scores.svg"), scoresSvg);
+  writeFileSync(join(judgeDir, "chart_stats.svg"), statsSvg);
+  console.log(`[judge] Written: ${join(judgeDir, "chart_scores.svg")}`);
+  console.log(`[judge] Written: ${join(judgeDir, "chart_stats.svg")}`);
+}
+
 function cmdSummary(judgeDir: string): void {
   const bmFile = join(judgeDir, "blinding_map.json");
   const tmplFile = join(judgeDir, "judgment_template.json");
@@ -491,6 +582,7 @@ function cmdSummary(judgeDir: string): void {
     `${"Run".padEnd(colW.run)}  ${"Cond".padEnd(colW.cond)}  ` +
     `${"Score".padStart(colW.score)}  ${"Weighted".padStart(colW.wscore)}`;
   const rows: string[] = [];
+  const chartRows: ChartRow[] = [];
 
   for (const [tid, labelsData] of Object.entries(tmpl)) {
     const task = TASK_BY_ID[tid];
@@ -556,6 +648,9 @@ function cmdSummary(judgeDir: string): void {
         `${run.padEnd(colW.run)}  ${condition.padEnd(colW.cond)}  ` +
         `${scoreStr.padStart(colW.score)}  ${wscoreStr.padStart(colW.wscore)}`
       );
+      if (total !== null) {
+        chartRows.push({ task: tid, condition, total, max: maxPts, pct: (total / maxPts) * 100 });
+      }
     }
   }
 
@@ -574,6 +669,7 @@ function cmdSummary(judgeDir: string): void {
   console.log();
   console.log("CONDITION TOTALS  (weighted score | tokens in/out | tool calls | time)");
   console.log();
+  const condStats: CondStats[] = [];
   for (const [cond, data] of Object.entries(condAgg).sort()) {
     const pct = data.max ? (data.score / data.max) * 100 : 0;
     const n = data.count;
@@ -585,9 +681,14 @@ function cmdSummary(judgeDir: string): void {
       `             in=${data.in_tok.toLocaleString()}  out=${data.out_tok.toLocaleString()}` +
       `  tools=${data.tools}  time=${data.secs.toFixed(1)}s`
     );
+    condStats.push({ condition: cond, score_pct: pct, in_tok: data.in_tok, out_tok: data.out_tok, tools: data.tools, secs: data.secs });
   }
   console.log();
   console.log(`[judge] Written: ${join(judgeDir, "judgment.json")}`);
+
+  if (chartRows.length > 0) {
+    generateCharts(judgeDir, chartRows, condStats);
+  }
 }
 
 async function cmdRun(opts: {
