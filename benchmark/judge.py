@@ -23,7 +23,6 @@ Usage
     python judge.py --summary results/judge_01
 """
 
-# ── stdlib-only bootstrap (runs before any third-party import) ─────────────────
 import os
 import sys
 
@@ -63,7 +62,6 @@ def _bootstrap() -> None:
 
 
 _bootstrap()
-# ── end bootstrap — imports below are intentionally after bootstrap ─────────────
 import argparse  # noqa: E402
 import datetime  # noqa: E402
 import json  # noqa: E402
@@ -76,9 +74,6 @@ from pathlib import Path  # noqa: E402
 _HERE = Path(os.path.abspath(__file__)).parent  # noqa: E402
 TEST_CASES = json.loads((_HERE / "test_cases.json").read_text(encoding="utf-8"))  # noqa: E402
 TASK_BY_ID = {t["id"]: t for t in TEST_CASES}
-
-
-# ── data loading ───────────────────────────────────────────────────────────────
 
 
 def load_results(dirs: list[Path]) -> dict:
@@ -143,18 +138,12 @@ def load_stats(dirs: list[Path]) -> dict:
     return stats
 
 
-# ── label assignment ───────────────────────────────────────────────────────────
-
-
 def assign_labels(entries: list, rng: random.Random) -> list[tuple[str, dict]]:
     """Shuffle entries and assign uppercase letters A, B, C …"""
     shuffled = list(entries)
     rng.shuffle(shuffled)
     labels = list(string.ascii_uppercase[: len(shuffled)])
     return list(zip(labels, shuffled))
-
-
-# ── formatting ─────────────────────────────────────────────────────────────────
 
 
 def format_task_block(task: dict, labeled: list[tuple[str, dict]]) -> str:
@@ -207,9 +196,6 @@ def build_template_entry(task: dict, labeled: list[tuple[str, dict]]) -> dict:
         }
         for label, _ in labeled
     }
-
-
-# ── run command ───────────────────────────────────────────────────────────────
 
 
 def cmd_run(
@@ -294,8 +280,6 @@ def cmd_run(
     cmd_generate(result_dirs, final_out, rng_seed)
     return final_out
 
-
-# ── auto-judge command ─────────────────────────────────────────────────────────
 
 _JUDGE_SYSTEM = (
     "You are an expert embedded-systems C code reviewer. "
@@ -458,9 +442,6 @@ def cmd_auto_judge(
     cmd_summary(judge_dir)
 
 
-# ── generate command ───────────────────────────────────────────────────────────
-
-
 def cmd_generate(result_dirs: list[Path], out_dir: Path, seed: int) -> None:
     raw = load_results(result_dirs)
     if not raw:
@@ -539,9 +520,6 @@ def cmd_generate(result_dirs: list[Path], out_dir: Path, seed: int) -> None:
     print(f"     — or manually submit {out_dir}/judge_input.txt to an LLM")
     print(f"  2. Fill    {out_dir}/judgment_template.json  with the scores (if manual)")
     print(f"  3. Run:    python judge.py --summary {out_dir}")
-
-
-# ── summary command ────────────────────────────────────────────────────────────
 
 
 def cmd_summary(judge_dir: Path) -> None:
@@ -672,9 +650,6 @@ def cmd_summary(judge_dir: Path) -> None:
     print(f"[judge] Written: {judge_dir}/judgment.json")
 
 
-# ── main ───────────────────────────────────────────────────────────────────────
-
-
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Blind LLM judge for cofe-graph benchmark",
@@ -695,7 +670,6 @@ def main() -> None:
         ),
     )
 
-    # ── mode flags
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument(
         "--run",
@@ -713,7 +687,6 @@ def main() -> None:
         help="Deanonymise scores and print per-condition report",
     )
 
-    # ── positional: result dirs (generate mode) or judge dir (summary mode)
     parser.add_argument(
         "paths",
         nargs="*",
@@ -722,7 +695,6 @@ def main() -> None:
         help="Result directories (generate mode) or judge output directory (--summary)",
     )
 
-    # ── --run mode args (forwarded to bench.py)
     parser.add_argument("--model", default=None, help="Model name passed to bench.py")
     parser.add_argument(
         "--base-url", default=None, dest="base_url", help="Base URL passed to bench.py"
@@ -757,7 +729,6 @@ def main() -> None:
         "--project-path", default=None, dest="project_path", metavar="PATH"
     )
 
-    # ── judge LLM args (--judge mode and optional auto-judge after --run)
     parser.add_argument(
         "--judge-model",
         default=None,
@@ -779,7 +750,6 @@ def main() -> None:
         help="API key for judge LLM (defaults to --api-key)",
     )
 
-    # ── shared args
     parser.add_argument(
         "--out",
         type=Path,
