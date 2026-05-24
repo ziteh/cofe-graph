@@ -73,10 +73,9 @@ import string  # noqa: E402
 import subprocess  # noqa: E402
 from pathlib import Path  # noqa: E402
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from test_cases import TEST_CASES  # noqa: E402
-
-TASK_BY_ID: dict = {t["id"]: t for t in TEST_CASES}
+_HERE = Path(os.path.abspath(__file__)).parent  # noqa: E402
+TEST_CASES = json.loads((_HERE / "test_cases.json").read_text(encoding="utf-8"))  # noqa: E402
+TASK_BY_ID = {t["id"]: t for t in TEST_CASES}
 
 
 # ── data loading ───────────────────────────────────────────────────────────────

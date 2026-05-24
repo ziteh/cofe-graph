@@ -89,7 +89,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent
 
 # ── test cases ────────────────────────────────────────────────────────────────
-from test_cases import TEST_CASES
+TEST_CASES = json.loads((SCRIPT_DIR / "test_cases.json").read_text(encoding="utf-8"))
 
 
 def make_question(task: dict) -> str:
