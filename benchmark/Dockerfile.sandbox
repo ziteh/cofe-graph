@@ -1,0 +1,8 @@
+FROM alpine:3.20
+
+# Install basic filesystem tools available to the WITHOUT/WITH agent inside the sandbox.
+# grep, find, cat, awk, sed, wc, head, tail, sort, uniq, tr, cut are all included
+# via grep and coreutils/findutils.
+RUN apk add --no-cache grep findutils coreutils
+
+WORKDIR /project

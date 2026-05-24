@@ -10,3 +10,4 @@ logs/
 Thumbs.db
 *:Zone.Identifier
 .mcp.json
+*.env
