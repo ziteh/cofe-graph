@@ -3,7 +3,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use walkdir::WalkDir;
 
-use serde_json::json;
+use serde_json::{Value, json};
 
 use crate::cache::Cache;
 use crate::graph::CallGraph;
@@ -38,7 +38,10 @@ fn parse_sources_into_graph(g: &mut CallGraph, sources: &[(&Path, &str)]) -> (us
 }
 
 /// Index from in-memory sources.
-pub async fn index_sources(graph: Arc<RwLock<CallGraph>>, sources: &[(&Path, &str)]) -> String {
+pub async fn index_sources(
+    graph: Arc<RwLock<CallGraph>>,
+    sources: &[(&Path, &str)],
+) -> Result<Value, String> {
     let mut g = graph.write().await;
     g.clear();
 
@@ -47,15 +50,14 @@ pub async fn index_sources(graph: Arc<RwLock<CallGraph>>, sources: &[(&Path, &st
     let fn_count = g.nodes.len();
     let edge_count: usize = g.callees.values().map(|s| s.len()).sum();
 
-    json!({
+    Ok(json!({
         "status": "indexed",
         "files_ok": files_ok,
         "files_err": files_err,
         "functions": fn_count,
         "call_edges": edge_count,
         "cached": false,
-    })
-    .to_string()
+    }))
 }
 
 /// Index from filesystem path.
@@ -63,7 +65,7 @@ pub async fn index_project(
     graph: Arc<RwLock<CallGraph>>,
     path: &Path,
     max_cache_entries: usize,
-) -> String {
+) -> Result<Value, String> {
     let cache = Cache::open(path, max_cache_entries);
 
     if let Some(ref c) = cache
@@ -73,13 +75,12 @@ pub async fn index_project(
         let edge_count: usize = cached.callees.values().map(|s| s.len()).sum();
         *graph.write().await = cached;
         c.record_hit();
-        return json!({
+        return Ok(json!({
             "status": "cached",
             "commit": c.commit_hash,
             "functions": fn_count,
             "call_edges": edge_count,
-        })
-        .to_string();
+        }));
     }
 
     let mut file_contents: Vec<(PathBuf, String)> = Vec::new();
@@ -120,13 +121,12 @@ pub async fn index_project(
     let fn_count = g.nodes.len();
     let edge_count: usize = g.callees.values().map(|s| s.len()).sum();
 
-    json!({
+    Ok(json!({
         "status": "indexed",
         "files_ok": files_ok,
         "files_err": read_err + parse_err,
         "functions": fn_count,
         "call_edges": edge_count,
         "cached": cached,
-    })
-    .to_string()
+    }))
 }

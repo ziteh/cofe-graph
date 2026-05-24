@@ -1,7 +1,8 @@
 use rmcp::schemars;
 use serde::Deserialize;
-use serde_json::json;
+use serde_json::{Value, json};
 
+use super::short_file;
 use crate::graph::CallGraph;
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
@@ -18,38 +19,46 @@ pub struct GetTypeUsersParams {
     pub name: String,
 }
 
-pub fn find_type(graph: &CallGraph, params: FindTypeParams) -> String {
+pub fn find_type(graph: &CallGraph, params: FindTypeParams) -> Result<Value, String> {
     let FindTypeParams { name } = params;
     let results = graph.find_type(&name);
     if results.is_empty() {
-        return json!({"content": format!("No types matching '{name}'"), "isError": true})
-            .to_string();
+        return Err(format!("No types matching '{name}'"));
     }
-    let matches: Vec<_> = results
+    let matches: Vec<Value> = results
         .iter()
         .map(|t| {
-            json!({
-                "name": t.name,
-                "kind": t.kind.as_str(),
-                "file": t.file,
-                "line": t.line,
-                "definition": t.definition,
-                "conditions": t.conditions,
-            })
+            let mut obj = serde_json::Map::new();
+            obj.insert("name".into(), json!(t.name));
+            obj.insert("kind".into(), json!(t.kind.as_str()));
+            obj.insert("file".into(), json!(t.file));
+            obj.insert("line".into(), json!(t.line));
+            obj.insert("definition".into(), json!(t.definition));
+            if !t.conditions.is_empty() {
+                obj.insert("conditions".into(), json!(t.conditions));
+            }
+            Value::Object(obj)
         })
         .collect();
-    json!({"content": matches, "isError": false}).to_string()
+    Ok(json!(matches))
 }
 
-pub fn get_type_users(graph: &CallGraph, params: GetTypeUsersParams) -> String {
+pub fn get_type_users(graph: &CallGraph, params: GetTypeUsersParams) -> Result<Value, String> {
     let GetTypeUsersParams { name } = params;
     let results = graph.get_type_users(&name);
     if results.is_empty() {
-        return json!({"content": format!("No functions reference type '{name}'"), "isError": true}).to_string();
+        return Err(format!("No functions reference type '{name}'"));
     }
-    let users: Vec<_> = results
+    let users: Vec<Value> = results
         .iter()
-        .map(|n| json!({"name": n.name, "file": n.file, "line": n.line, "is_static": n.is_static}))
+        .map(|n| {
+            let mut obj = serde_json::Map::new();
+            obj.insert("name".into(), json!(n.name));
+            obj.insert("file".into(), json!(short_file(&n.file)));
+            obj.insert("line".into(), json!(n.line));
+            obj.insert("static".into(), json!(n.is_static));
+            Value::Object(obj)
+        })
         .collect();
-    json!({"content": json!({"type": name, "users": users}), "isError": false}).to_string()
+    Ok(json!(users))
 }

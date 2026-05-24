@@ -1,20 +1,10 @@
-use serde_json::json;
+use serde_json::{Value, json};
 
 use crate::graph::{CallGraph, DeadCodeKind, FunctionNode};
 
-pub fn find_dead_code(graph: &CallGraph) -> String {
+pub fn find_dead_code(graph: &CallGraph) -> Result<Value, String> {
     let mut dead = graph.find_dead_code();
     dead.sort_by_key(|(n, _)| &n.name);
-    if dead.is_empty() {
-        return json!({
-            "content": {
-                "summary": {"total": 0},
-                "results": [],
-            },
-            "isError": false
-        })
-        .to_string();
-    }
 
     let fmt = |(n, k): &&(&FunctionNode, DeadCodeKind)| {
         json!({
@@ -42,26 +32,22 @@ pub fn find_dead_code(graph: &CallGraph) -> String {
         .filter(|(_, k)| *k == DeadCodeKind::Entrypoint)
         .collect();
 
-    json!({
-        "content": {
-            "summary": {
-                "total": dead.len(),
-                "suspicious": suspicious.len(),
-                "macro_registered": macro_reg.len(),
-                "callback_by_name": cb_name.len(),
-                "entrypoint": entry.len(),
-            },
-            "suspicious": suspicious.iter().map(fmt).collect::<Vec<_>>(),
-            "macro_registered": macro_reg.iter().map(fmt).collect::<Vec<_>>(),
-            "callback_by_name": cb_name.iter().map(fmt).collect::<Vec<_>>(),
-            "entrypoints": entry.iter().map(fmt).collect::<Vec<_>>(),
+    Ok(json!({
+        "summary": {
+            "total": dead.len(),
+            "suspicious": suspicious.len(),
+            "macro_registered": macro_reg.len(),
+            "callback_by_name": cb_name.len(),
+            "entrypoint": entry.len(),
         },
-        "isError": false
-    })
-    .to_string()
+        "suspicious": suspicious.iter().map(fmt).collect::<Vec<_>>(),
+        "macro_registered": macro_reg.iter().map(fmt).collect::<Vec<_>>(),
+        "callback_by_name": cb_name.iter().map(fmt).collect::<Vec<_>>(),
+        "entrypoints": entry.iter().map(fmt).collect::<Vec<_>>(),
+    }))
 }
 
-pub fn get_stats(graph: &CallGraph) -> String {
+pub fn get_stats(graph: &CallGraph) -> Result<Value, String> {
     let fn_count = graph.nodes.len();
     let edge_count: usize = graph.callees.values().map(|s| s.len()).sum();
     let dead = graph.find_dead_code();
@@ -82,18 +68,14 @@ pub fn get_stats(graph: &CallGraph) -> String {
         .map(|(name, count)| json!({"name": name, "callees": count}))
         .collect();
 
-    json!({
-        "content": {
-            "functions": fn_count,
-            "call_edges": edge_count,
-            "dead_code": {
-                "total": dead_count,
-                "suspicious": true_dead_count,
-            },
-            "top_fan_in": top_fan_in,
-            "top_fan_out": top_fan_out,
+    Ok(json!({
+        "functions": fn_count,
+        "call_edges": edge_count,
+        "dead_code": {
+            "total": dead_count,
+            "suspicious": true_dead_count,
         },
-        "isError": false
-    })
-    .to_string()
+        "top_fan_in": top_fan_in,
+        "top_fan_out": top_fan_out,
+    }))
 }

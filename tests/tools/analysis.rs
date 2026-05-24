@@ -1,10 +1,7 @@
-use serde_json::Value;
-
 use cofe_graph::tools::analysis::{find_dead_code, get_stats};
 
 #[tokio::test]
 async fn test_find_dead_code() {
-    // unused is never called — should appear in dead code report.
     let graph_lock = super::build_graph(&[(
         "code.c",
         concat!(
@@ -16,13 +13,8 @@ async fn test_find_dead_code() {
     .await;
     let graph = graph_lock.read().await;
 
-    let result = find_dead_code(&graph);
-    let v: Value = serde_json::from_str(&result).unwrap();
-    assert_eq!(v["isError"], false);
-    assert!(
-        v["content"].get("summary").is_some(),
-        "Should contain summary"
-    );
+    let v = find_dead_code(&graph).unwrap();
+    assert!(v.get("summary").is_some(), "Should contain summary");
 }
 
 #[tokio::test]
@@ -38,8 +30,6 @@ async fn test_get_stats() {
     .await;
     let graph = graph_lock.read().await;
 
-    let result = get_stats(&graph);
-    let v: Value = serde_json::from_str(&result).unwrap();
-    assert_eq!(v["isError"], false);
-    assert!(v["content"].get("functions").is_some());
+    let v = get_stats(&graph).unwrap();
+    assert!(v.get("functions").is_some());
 }

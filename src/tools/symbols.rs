@@ -1,6 +1,6 @@
 use rmcp::schemars;
 use serde::Deserialize;
-use serde_json::json;
+use serde_json::{Value, json};
 
 use crate::graph::CallGraph;
 
@@ -12,25 +12,26 @@ pub struct FindSymbolParams {
     pub name: String,
 }
 
-pub fn find_symbol(graph: &CallGraph, params: FindSymbolParams) -> String {
+pub fn find_symbol(graph: &CallGraph, params: FindSymbolParams) -> Result<Value, String> {
     let FindSymbolParams { name } = params;
     let results = graph.find_symbol(&name);
     if results.is_empty() {
-        return json!({"content": format!("No symbols matching '{name}'"), "isError": true})
-            .to_string();
+        return Err(format!("No symbols matching '{name}'"));
     }
-    let matches: Vec<_> = results
+    let matches: Vec<Value> = results
         .iter()
         .map(|s| {
-            json!({
-                "name": s.name,
-                "kind": s.kind.as_str(),
-                "value": s.value,
-                "file": s.file,
-                "line": s.line,
-                "conditions": s.conditions,
-            })
+            let mut obj = serde_json::Map::new();
+            obj.insert("name".into(), json!(s.name));
+            obj.insert("kind".into(), json!(s.kind.as_str()));
+            obj.insert("value".into(), json!(s.value));
+            obj.insert("file".into(), json!(s.file));
+            obj.insert("line".into(), json!(s.line));
+            if !s.conditions.is_empty() {
+                obj.insert("conditions".into(), json!(s.conditions));
+            }
+            Value::Object(obj)
         })
         .collect();
-    json!({"content": matches, "isError": false}).to_string()
+    Ok(json!(matches))
 }

@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use rmcp::schemars;
 use serde::Deserialize;
-use serde_json::json;
+use serde_json::{Value, json};
 
 use crate::annotations::{AnnotationStore, FileAnnotation};
 use crate::graph::CallGraph;
@@ -82,17 +82,12 @@ fn match_one_file(graph: &CallGraph, substr: &str) -> Result<String, String> {
     }
 }
 
-/// Write a semantic annotation for a file. The current file hash is computed from
-/// the graph and stored alongside the annotation for staleness detection.
 pub fn annotate_file(
     graph: &CallGraph,
     store: &mut AnnotationStore,
     p: AnnotateFileParams,
-) -> String {
-    let file = match match_one_file(graph, &p.path) {
-        Ok(f) => f,
-        Err(e) => return json!({"content": {"error": e}, "isError": true}).to_string(),
-    };
+) -> Result<Value, String> {
+    let file = match_one_file(graph, &p.path)?;
     let file_hash = compute_hash(graph, &file);
     store.files.insert(
         file.clone(),
@@ -105,17 +100,14 @@ pub fn annotate_file(
         },
     );
     store.save();
-    json!({"content": {"ok": true, "file": file}, "isError": false}).to_string()
+    Ok(json!({"ok": true, "file": file}))
 }
 
-/// Retrieve the annotation for files matching a path substring.
-/// Each result includes a `stale` flag indicating whether the file has changed
-/// since the annotation was written.
 pub fn get_file_annotation(
     graph: &CallGraph,
     store: &AnnotationStore,
     p: FilePathParams,
-) -> String {
+) -> Result<Value, String> {
     let q = p.path.to_lowercase();
     let mut matches: Vec<_> = store
         .files
@@ -123,7 +115,7 @@ pub fn get_file_annotation(
         .filter(|(k, _)| k.to_lowercase().contains(&q))
         .collect();
     if matches.is_empty() {
-        return json!({"content": {"found": false}, "isError": false}).to_string();
+        return Ok(json!({"found": false}));
     }
     matches.sort_by_key(|(k, _)| k.as_str());
     let results: Vec<_> = matches
@@ -140,11 +132,10 @@ pub fn get_file_annotation(
             })
         })
         .collect();
-    json!({"content": {"found": true, "results": results}, "isError": false}).to_string()
+    Ok(json!({"found": true, "results": results}))
 }
 
-/// List all annotated files with their subsystem and staleness status.
-pub fn list_file_annotations(graph: &CallGraph, store: &AnnotationStore) -> String {
+pub fn list_file_annotations(graph: &CallGraph, store: &AnnotationStore) -> Result<Value, String> {
     let mut entries: Vec<_> = store
         .files
         .iter()
@@ -164,12 +155,10 @@ pub fn list_file_annotations(graph: &CallGraph, store: &AnnotationStore) -> Stri
             })
         })
         .collect();
-    json!({"content": {"count": results.len(), "files": results}, "isError": false}).to_string()
+    Ok(json!({"count": results.len(), "files": results}))
 }
 
-/// List indexed files that have no annotation yet, ordered by function count
-/// (most functions first — highest priority targets for annotation).
-pub fn list_unannotated_files(graph: &CallGraph, store: &AnnotationStore) -> String {
+pub fn list_unannotated_files(graph: &CallGraph, store: &AnnotationStore) -> Result<Value, String> {
     let files = all_files(graph);
     let mut unannotated: Vec<(&String, usize)> = files
         .iter()
@@ -188,21 +177,15 @@ pub fn list_unannotated_files(graph: &CallGraph, store: &AnnotationStore) -> Str
         .into_iter()
         .map(|(f, fn_count)| json!({"file": f, "function_count": fn_count}))
         .collect();
-    json!({"content": {"count": results.len(), "files": results}, "isError": false}).to_string()
+    Ok(json!({"count": results.len(), "files": results}))
 }
 
-/// Return a rich analysis bundle for a single file: all functions with call
-/// statistics and source, globals, types, and any existing annotation.
-/// Designed to give an LLM everything it needs to annotate the file in one call.
 pub fn get_file_context(
     graph: &CallGraph,
     store: &AnnotationStore,
     p: FileContextParams,
-) -> String {
-    let file = match match_one_file(graph, &p.filename) {
-        Ok(f) => f,
-        Err(e) => return json!({"content": {"error": e}, "isError": true}).to_string(),
-    };
+) -> Result<Value, String> {
+    let file = match_one_file(graph, &p.filename)?;
 
     let mut fns: Vec<_> = graph
         .nodes
@@ -273,16 +256,12 @@ pub fn get_file_context(
         })
     });
 
-    json!({
-        "content": {
-            "file": file,
-            "function_count": functions.len(),
-            "functions": functions,
-            "globals": globals,
-            "types": types,
-            "existing_annotation": annotation,
-        },
-        "isError": false,
-    })
-    .to_string()
+    Ok(json!({
+        "file": file,
+        "function_count": functions.len(),
+        "functions": functions,
+        "globals": globals,
+        "types": types,
+        "existing_annotation": annotation,
+    }))
 }

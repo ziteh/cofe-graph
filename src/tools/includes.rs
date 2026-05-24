@@ -1,6 +1,6 @@
 use rmcp::schemars;
 use serde::Deserialize;
-use serde_json::json;
+use serde_json::{Value, json};
 
 use crate::graph::CallGraph;
 
@@ -20,14 +20,13 @@ pub struct GetIncludersParams {
     pub header: String,
 }
 
-pub fn get_includes(graph: &CallGraph, params: GetIncludesParams) -> String {
+pub fn get_includes(graph: &CallGraph, params: GetIncludesParams) -> Result<Value, String> {
     let GetIncludesParams { file } = params;
     let results = graph.get_includes(&file);
     if results.is_empty() {
-        return json!({"content": format!("No indexed files matching '{file}'"), "isError": true})
-            .to_string();
+        return Err(format!("No indexed files matching '{file}'"));
     }
-    let entries: Vec<_> = results
+    let entries: Vec<Value> = results
         .iter()
         .map(|(path, edges)| {
             let includes: Vec<_> = edges
@@ -37,17 +36,16 @@ pub fn get_includes(graph: &CallGraph, params: GetIncludesParams) -> String {
             json!({"file": path, "includes": includes})
         })
         .collect();
-    json!({"content": entries, "isError": false}).to_string()
+    Ok(json!(entries))
 }
 
-pub fn get_includers(graph: &CallGraph, params: GetIncludersParams) -> String {
+pub fn get_includers(graph: &CallGraph, params: GetIncludersParams) -> Result<Value, String> {
     let GetIncludersParams { header } = params;
     let results = graph.get_includers(&header);
     if results.is_empty() {
-        return json!({"content": format!("No files include '{header}'"), "isError": true})
-            .to_string();
+        return Err(format!("No files include '{header}'"));
     }
-    let includers: Vec<_> = results
+    let includers: Vec<Value> = results
         .iter()
         .map(|(file, edge)| {
             json!({
@@ -57,6 +55,5 @@ pub fn get_includers(graph: &CallGraph, params: GetIncludersParams) -> String {
             })
         })
         .collect();
-    json!({"content": json!({"header": header, "includers": includers}), "isError": false})
-        .to_string()
+    Ok(json!(includers))
 }

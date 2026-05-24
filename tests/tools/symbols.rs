@@ -1,5 +1,3 @@
-use serde_json::Value;
-
 use cofe_graph::tools::symbols::{FindSymbolParams, find_symbol};
 
 #[tokio::test]
@@ -10,11 +8,8 @@ async fn test_find_symbol() {
     let params = FindSymbolParams {
         name: "CONST_VAL".to_string(),
     };
-    let result = find_symbol(&graph, params);
-
-    let v: Value = serde_json::from_str(&result).unwrap();
-    assert_eq!(v["isError"], false);
-    let content = v["content"].as_array().expect("Expected 'content' array");
+    let matches = find_symbol(&graph, params).unwrap();
+    let content = matches.as_array().expect("Expected array");
 
     assert_eq!(content.len(), 1);
     assert_eq!(content[0]["name"], "CONST_VAL");

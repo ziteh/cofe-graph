@@ -1,5 +1,3 @@
-use serde_json::Value;
-
 use cofe_graph::tools::functions::{
     FindFunctionParams, FindInFileParams, find_function, find_functions_in_file,
 };
@@ -19,11 +17,8 @@ async fn test_find_function() {
     let params = FindFunctionParams {
         name: "process_data".to_string(),
     };
-    let result = find_function(&graph, params);
-
-    let v: Value = serde_json::from_str(&result).unwrap();
-    assert_eq!(v["isError"], false);
-    let content = v["content"].as_array().unwrap();
+    let matches = find_function(&graph, params).unwrap();
+    let content = matches.as_array().unwrap();
 
     assert_eq!(
         content.len(),
@@ -31,7 +26,7 @@ async fn test_find_function() {
         "Should find exactly one 'process_data' function"
     );
     assert_eq!(content[0]["name"], "process_data");
-    assert_eq!(content[0]["is_static"], false);
+    assert_eq!(content[0]["static"], false);
 }
 
 #[tokio::test]
@@ -50,17 +45,17 @@ async fn test_find_functions_in_file() {
     let params = FindInFileParams {
         filename: "module.c".to_string(),
     };
-    let result = find_functions_in_file(&graph, params);
+    // Single-file query: value is an object {file, functions:[...]}
+    let v = find_functions_in_file(&graph, params).unwrap();
+    let functions = v["functions"].as_array().unwrap();
+    assert_eq!(functions.len(), 3, "Should find helper, init, work");
 
-    let v: Value = serde_json::from_str(&result).unwrap();
-    assert_eq!(v["isError"], false);
-    let content = v["content"].as_array().unwrap();
+    let helper = functions.iter().find(|m| m["name"] == "helper").unwrap();
+    assert_eq!(helper["static"], true, "helper should be static");
 
-    assert_eq!(content.len(), 3, "Should find helper, init, work");
-
-    let helper = content.iter().find(|m| m["name"] == "helper").unwrap();
-    assert_eq!(helper["is_static"], true, "helper should be static");
-
-    let work = content.iter().find(|m| m["name"] == "work").unwrap();
-    assert_eq!(work["is_static"], false, "work should be public");
+    let work = functions.iter().find(|m| m["name"] == "work").unwrap();
+    assert_eq!(
+        work["static"], false,
+        "non-static fn should have static: false"
+    );
 }

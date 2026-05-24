@@ -1,67 +1,78 @@
-use serde_json::json;
+use serde_json::{Value, json};
 
 use super::functions::GetSourceParams;
 use super::includes::GetIncludesParams;
+use super::short_file;
 use super::types::GetTypeUsersParams;
 use crate::graph::CallGraph;
 
-pub fn get_globals(graph: &CallGraph, params: GetIncludesParams) -> String {
+pub fn get_globals(graph: &CallGraph, params: GetIncludesParams) -> Result<Value, String> {
     let GetIncludesParams { file } = params;
     let results = graph.find_globals(&file);
     if results.is_empty() {
-        return json!({"content": format!("No global variables found in files matching '{file}'"), "isError": true})
-            .to_string();
+        return Err(format!(
+            "No global variables found in files matching '{file}'"
+        ));
     }
-    let matches: Vec<_> = results
+    let matches: Vec<Value> = results
         .iter()
         .map(|v| {
-            json!({
-                "name": v.name,
-                "is_static": v.is_static,
-                "file": v.file,
-                "line": v.line,
-                "decl": v.decl,
-                "conditions": v.conditions,
-            })
+            let mut obj = serde_json::Map::new();
+            obj.insert("name".into(), json!(v.name));
+            obj.insert("file".into(), json!(short_file(&v.file)));
+            obj.insert("line".into(), json!(v.line));
+            obj.insert("decl".into(), json!(v.decl));
+            obj.insert("static".into(), json!(v.is_static));
+            if !v.conditions.is_empty() {
+                obj.insert("conditions".into(), json!(v.conditions));
+            }
+            Value::Object(obj)
         })
         .collect();
-    json!({"content": matches, "isError": false}).to_string()
+    Ok(json!(matches))
 }
 
-pub fn get_global_users(graph: &CallGraph, params: GetTypeUsersParams) -> String {
+pub fn get_global_users(graph: &CallGraph, params: GetTypeUsersParams) -> Result<Value, String> {
     let GetTypeUsersParams { name } = params;
     let results = graph.get_global_users(&name);
     if results.is_empty() {
-        return json!({"content": format!("No functions reference global '{name}'"), "isError": true}).to_string();
+        return Err(format!("No functions reference global '{name}'"));
     }
-    let users: Vec<_> = results
+    let users: Vec<Value> = results
         .iter()
-        .map(|n| json!({"name": n.name, "file": n.file, "line": n.line, "is_static": n.is_static}))
+        .map(|n| {
+            let mut obj = serde_json::Map::new();
+            obj.insert("name".into(), json!(n.name));
+            obj.insert("file".into(), json!(short_file(&n.file)));
+            obj.insert("line".into(), json!(n.line));
+            obj.insert("static".into(), json!(n.is_static));
+            Value::Object(obj)
+        })
         .collect();
-    json!({"content": json!({"global": name, "users": users}), "isError": false}).to_string()
+    Ok(json!(users))
 }
 
-pub fn get_fn_globals(graph: &CallGraph, params: GetSourceParams) -> String {
+pub fn get_fn_globals(graph: &CallGraph, params: GetSourceParams) -> Result<Value, String> {
     let GetSourceParams { name } = params;
     let results = graph.get_fn_globals(&name);
     if results.is_empty() {
         if graph.nodes.contains_key(&name) {
-            return json!({"content": format!("'{name}' does not reference any indexed global variables"), "isError": true})
-                .to_string();
+            return Err(format!(
+                "'{name}' does not reference any indexed global variables"
+            ));
         }
-        return json!({"content": format!("Function '{name}' not found"), "isError": true})
-            .to_string();
+        return Err(format!("Function '{name}' not found"));
     }
-    let globals: Vec<_> = results
+    let globals: Vec<Value> = results
         .iter()
         .map(|v| {
-            json!({
-                "name": v.name,
-                "is_static": v.is_static,
-                "file": v.file,
-                "line": v.line,
-            })
+            let mut obj = serde_json::Map::new();
+            obj.insert("name".into(), json!(v.name));
+            obj.insert("file".into(), json!(short_file(&v.file)));
+            obj.insert("line".into(), json!(v.line));
+            obj.insert("static".into(), json!(v.is_static));
+            Value::Object(obj)
         })
         .collect();
-    json!({"content": json!({"function": name, "globals": globals}), "isError": false}).to_string()
+    Ok(json!(globals))
 }

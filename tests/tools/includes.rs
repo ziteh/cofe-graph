@@ -1,5 +1,3 @@
-use serde_json::Value;
-
 use cofe_graph::tools::includes::{
     GetIncludersParams, GetIncludesParams, get_includers, get_includes,
 };
@@ -20,11 +18,8 @@ async fn test_get_includes() {
     let params = GetIncludesParams {
         file: "app.c".to_string(),
     };
-    let result = get_includes(&graph, params);
-
-    let v: Value = serde_json::from_str(&result).unwrap();
-    assert_eq!(v["isError"], false);
-    let results = v["content"].as_array().expect("Expected 'content' array");
+    let v = get_includes(&graph, params).unwrap();
+    let results = v.as_array().expect("Expected array");
     let includes: Vec<&str> = results[0]["includes"]
         .as_array()
         .unwrap()
@@ -58,13 +53,10 @@ async fn test_get_includers() {
     let params = GetIncludersParams {
         header: "dep.h".to_string(),
     };
-    let result = get_includers(&graph, params);
-
-    let v: Value = serde_json::from_str(&result).unwrap();
-    assert_eq!(v["isError"], false);
-    let includers: Vec<&str> = v["content"]["includers"]
+    let v = get_includers(&graph, params).unwrap();
+    let includers: Vec<&str> = v
         .as_array()
-        .expect("Expected 'includers' array")
+        .expect("Expected includers array")
         .iter()
         .map(|m| m["file"].as_str().unwrap())
         .collect();

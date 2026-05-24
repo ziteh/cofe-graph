@@ -9,7 +9,7 @@ mod tools {
     async fn build_graph(sources: &[(&str, &str)]) -> Arc<RwLock<CallGraph>> {
         let graph = Arc::new(RwLock::new(CallGraph::default()));
         let pairs: Vec<(&Path, &str)> = sources.iter().map(|(p, s)| (Path::new(p), *s)).collect();
-        index_sources(Arc::clone(&graph), &pairs).await;
+        let _ = index_sources(Arc::clone(&graph), &pairs).await;
         graph
     }
 
