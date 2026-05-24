@@ -132,12 +132,9 @@ pub fn get_source(graph: &CallGraph, params: GetSourceParams) -> Result<Value, S
     match graph.nodes.get(&name) {
         Some(n) => {
             let mut obj = serde_json::Map::new();
-            obj.insert("name".into(), json!(n.name));
             obj.insert("file".into(), json!(n.file));
             obj.insert("line".into(), json!(n.line));
-            if n.is_static {
-                obj.insert("static".into(), json!(true));
-            }
+            obj.insert("static".into(), json!(n.is_static));
             if !n.conditions.is_empty() {
                 obj.insert("conditions".into(), json!(n.conditions));
             }
