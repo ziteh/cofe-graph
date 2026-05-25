@@ -7,6 +7,7 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
 const DEFAULT_MAX_CACHE_ENTRIES: usize = 15;
+const DEFAULT_WEBUI_PORT: u16 = 5113;
 
 struct Args {
     path: PathBuf,
@@ -81,16 +82,16 @@ async fn main() -> Result<()> {
         .with(stderr_layer)
         .init();
 
-    // Start the MCP server
+    // Start server
     tracing::info!(
         project = %args.path.display(),
         format = if args.use_toon { "toon" } else { "json" },
         max_cache = args.max_cache,
-        "starting MCP server on stdio",
+        "starting MCP server on stdio, and the web UI on http://localhost:{DEFAULT_WEBUI_PORT}",
     );
-    let service = CofeGraph::new(args.path, args.use_toon, args.max_cache)
-        .serve(rmcp::transport::stdio())
-        .await?;
+    let cofe = CofeGraph::new(args.path, args.use_toon, args.max_cache);
+    tokio::spawn(cofe_graph::webui::start(cofe.clone(), DEFAULT_WEBUI_PORT));
+    let service = cofe.serve(rmcp::transport::stdio()).await?;
     service.waiting().await?;
 
     Ok(())

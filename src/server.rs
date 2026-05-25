@@ -18,9 +18,9 @@ use crate::tools::types::{FindTypeParams, GetTypeUsersParams};
 
 #[derive(Clone)]
 pub struct CofeGraph {
-    graph: Arc<RwLock<CallGraph>>,
+    pub(crate) graph: Arc<RwLock<CallGraph>>,
     annotations: Arc<RwLock<AnnotationStore>>,
-    project_path: PathBuf,
+    pub(crate) project_path: PathBuf,
     use_toon: bool,
     max_cache_entries: usize,
     tool_router: ToolRouter<Self>,
