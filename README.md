@@ -11,7 +11,8 @@ A code graph RAG MCP server for embedded C.
   "mcpServers": {
     "cofe-graph": {
       "type": "stdio",
-      "command": "/path/to/cofe-graph"
+      "command": "/path/to/cofe-graph",
+      "args": ["/path/to/codebase", "--toon"]
     }
   }
 }
