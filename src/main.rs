@@ -3,8 +3,6 @@ use cofe_graph::cache::COFE_DATA_DIR;
 use cofe_graph::server::CofeGraph;
 use rmcp::ServiceExt;
 use std::path::PathBuf;
-use tracing_subscriber::layer::SubscriberExt;
-use tracing_subscriber::util::SubscriberInitExt;
 
 const DEFAULT_MAX_CACHE_ENTRIES: usize = 15;
 const DEFAULT_WEBUI_PORT: u16 = 5113;
@@ -55,32 +53,8 @@ fn parse_args() -> Result<Args> {
 async fn main() -> Result<()> {
     let args = parse_args()?;
 
-    // Init logging
     let log_dir = args.path.join(COFE_DATA_DIR).join("logs");
-    std::fs::create_dir_all(&log_dir)?;
-
-    let file_appender = tracing_appender::rolling::daily(&log_dir, "cofe-graph.log");
-    let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
-
-    let file_layer = tracing_subscriber::fmt::layer()
-        .with_writer(non_blocking)
-        .with_ansi(false)
-        .with_target(false);
-
-    let stderr_layer = if args.quiet {
-        None
-    } else {
-        Some(
-            tracing_subscriber::fmt::layer()
-                .with_writer(std::io::stderr)
-                .with_target(false),
-        )
-    };
-
-    tracing_subscriber::registry()
-        .with(file_layer)
-        .with(stderr_layer)
-        .init();
+    let _log_guard = cofe_graph::log::init(&log_dir, args.quiet);
 
     // Start server
     tracing::info!(

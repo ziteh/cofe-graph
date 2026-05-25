@@ -19,7 +19,7 @@ pub async fn start(cofe: CofeGraph, port: u16) {
 
     let listener = tokio::net::TcpListener::bind(("0.0.0.0", port))
         .await
-        .expect(&format!("failed to bind webui port: {}", port));
+        .unwrap_or_else(|_| panic!("failed to bind webui port: {}", port));
 
     axum::serve(listener, app).await.unwrap();
 }
