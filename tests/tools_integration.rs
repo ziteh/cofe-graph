@@ -18,6 +18,7 @@ mod tools {
     mod functions;
     mod globals;
     mod includes;
+    mod search;
     mod symbols;
     mod traverse;
     mod types;

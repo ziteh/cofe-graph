@@ -46,16 +46,17 @@ async fn test_find_functions_in_file() {
         filename: "module.c".to_string(),
     };
     // Single-file query: value is an object {file, functions:[...]}
-    let v = find_functions_in_file(&graph, params).unwrap();
-    let functions = v["functions"].as_array().unwrap();
-    assert_eq!(functions.len(), 3, "Should find helper, init, work");
+    let v = find_functions_in_file(&graph, std::path::Path::new(""), params).unwrap();
+    let fns = v["module.c"].as_array().unwrap();
+    assert_eq!(fns.len(), 3, "Should find helper, init, work");
 
-    let helper = functions.iter().find(|m| m["name"] == "helper").unwrap();
-    assert_eq!(helper["static"], true, "helper should be static");
+    let helper = fns.iter().find(|m| m["name"] == "helper").unwrap();
+    assert_eq!(helper["is_static"], true);
+    assert!(helper.get("file").is_none(), "file should not be in entry");
 
-    let work = functions.iter().find(|m| m["name"] == "work").unwrap();
-    assert_eq!(
-        work["static"], false,
-        "non-static fn should have static: false"
-    );
+    let init = fns.iter().find(|m| m["name"] == "init").unwrap();
+    assert_eq!(init["is_static"], false);
+
+    let work = fns.iter().find(|m| m["name"] == "work").unwrap();
+    assert_eq!(work["is_static"], false);
 }

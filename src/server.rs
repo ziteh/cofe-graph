@@ -10,11 +10,11 @@ use tokio::sync::RwLock;
 use crate::annotations::AnnotationStore;
 use crate::graph::CallGraph;
 use crate::tools::annotate::{AnnotateFileParams, FileContextParams, FilePathParams};
-use crate::tools::functions::{FindFunctionParams, FindInFileParams, GetSourceParams, TopNParams};
+use crate::tools::functions::{FindInFileParams, GetSourceParams, TopNParams};
 use crate::tools::includes::{GetIncludersParams, GetIncludesParams};
-use crate::tools::symbols::FindSymbolParams;
+use crate::tools::search::SearchParams;
 use crate::tools::traverse::{CalleesParams, CallersParams, GetPathParams};
-use crate::tools::types::{FindTypeParams, GetTypeUsersParams};
+use crate::tools::types::GetTypeUsersParams;
 
 #[derive(Clone)]
 pub struct CofeGraph {
@@ -76,10 +76,12 @@ impl CofeGraph {
         )
     }
 
-    #[tool(description = "Search for functions by name (case-insensitive substring match)")]
-    async fn find_function(&self, params: Parameters<FindFunctionParams>) -> CallToolResult {
+    #[tool(
+        description = "Search for functions, types (struct/union/enum/typedef), and symbols (#define, macros, enum values) by name (case-insensitive substring match). Use kind=function|type|symbol to filter."
+    )]
+    async fn search(&self, params: Parameters<SearchParams>) -> CallToolResult {
         let Parameters(p) = params;
-        self.call_result(crate::tools::functions::find_function(
+        self.call_result(crate::tools::search::search(
             &*self.graph.read().await,
             &self.project_path,
             p,
@@ -136,30 +138,13 @@ impl CofeGraph {
     }
 
     #[tool(
-        description = "Show overall call graph statistics: function count, edge count, and top fan-in/fan-out functions"
-    )]
-    async fn get_stats(&self) -> CallToolResult {
-        self.call_result(crate::tools::analysis::get_stats(&*self.graph.read().await))
-    }
-
-    #[tool(
-        description = "List all functions defined in files matching a filename substring (case-insensitive)"
+        description = "List all functions in files matching a filename substring, grouped by file path. Each entry contains name/line/is_static."
     )]
     async fn find_functions_in_file(&self, params: Parameters<FindInFileParams>) -> CallToolResult {
         let Parameters(p) = params;
         self.call_result(crate::tools::functions::find_functions_in_file(
             &*self.graph.read().await,
-            p,
-        ))
-    }
-
-    #[tool(
-        description = "List non-static (public) functions in files matching a filename substring — shows the API surface of a module"
-    )]
-    async fn get_public_api(&self, params: Parameters<FindInFileParams>) -> CallToolResult {
-        let Parameters(p) = params;
-        self.call_result(crate::tools::functions::get_public_api(
-            &*self.graph.read().await,
+            &self.project_path,
             p,
         ))
     }
@@ -189,26 +174,6 @@ impl CofeGraph {
     }
 
     #[tool(
-        description = "List all global variables referenced in a function's source (word-boundary match)"
-    )]
-    async fn get_fn_globals(&self, params: Parameters<GetSourceParams>) -> CallToolResult {
-        let Parameters(p) = params;
-        self.call_result(crate::tools::globals::get_fn_globals(
-            &*self.graph.read().await,
-            &self.project_path,
-            p,
-        ))
-    }
-
-    #[tool(
-        description = "Look up struct, union, enum, and typedef definitions by name (case-insensitive substring match)"
-    )]
-    async fn find_type(&self, params: Parameters<FindTypeParams>) -> CallToolResult {
-        let Parameters(p) = params;
-        self.call_result(crate::tools::types::find_type(&*self.graph.read().await, p))
-    }
-
-    #[tool(
         description = "Find all functions that reference a given type name in their source (exact word match)"
     )]
     async fn get_type_users(&self, params: Parameters<GetTypeUsersParams>) -> CallToolResult {
@@ -235,17 +200,6 @@ impl CofeGraph {
     async fn get_includers(&self, params: Parameters<GetIncludersParams>) -> CallToolResult {
         let Parameters(p) = params;
         self.call_result(crate::tools::includes::get_includers(
-            &*self.graph.read().await,
-            p,
-        ))
-    }
-
-    #[tool(
-        description = "Look up #define constants, function-like macros, and enum values by name (case-insensitive substring match)"
-    )]
-    async fn find_symbol(&self, params: Parameters<FindSymbolParams>) -> CallToolResult {
-        let Parameters(p) = params;
-        self.call_result(crate::tools::symbols::find_symbol(
             &*self.graph.read().await,
             p,
         ))
@@ -289,17 +243,6 @@ impl CofeGraph {
         let graph = self.graph.read().await;
         let store = self.annotations.read().await;
         self.call_result(crate::tools::annotate::list_file_annotations(
-            &graph, &store,
-        ))
-    }
-
-    #[tool(
-        description = "List indexed files that have no annotation yet, ordered by function count (most functions first)"
-    )]
-    async fn list_unannotated_files(&self) -> CallToolResult {
-        let graph = self.graph.read().await;
-        let store = self.annotations.read().await;
-        self.call_result(crate::tools::annotate::list_unannotated_files(
             &graph, &store,
         ))
     }

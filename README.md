@@ -1,6 +1,6 @@
 # Cofe Graph ☕
 
-A code graph RAG MCP server for embedded C.
+A code graph RAG MCP server for embedded C. Inspired by [CodeGraph](https://github.com/colbymchenry/codegraph).
 
 ## Usage
 

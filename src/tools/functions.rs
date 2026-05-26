@@ -1,5 +1,3 @@
-use std::collections::BTreeMap;
-
 use rmcp::schemars;
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -43,17 +41,6 @@ fn fn_entry(n: &crate::graph::FunctionNode, root: &std::path::Path) -> Value {
     Value::Object(obj)
 }
 
-fn compact_fn_entry(n: &crate::graph::FunctionNode) -> Value {
-    let mut obj = serde_json::Map::new();
-    obj.insert("name".into(), json!(n.name));
-    obj.insert("line".into(), json!(n.line));
-    obj.insert("static".into(), json!(n.is_static));
-    if !n.conditions.is_empty() {
-        obj.insert("conditions".into(), json!(n.conditions));
-    }
-    Value::Object(obj)
-}
-
 pub fn find_function(
     graph: &CallGraph,
     root: &std::path::Path,
@@ -75,6 +62,7 @@ pub fn find_function(
 
 pub fn find_functions_in_file(
     graph: &CallGraph,
+    root: &std::path::Path,
     params: FindInFileParams,
 ) -> Result<Value, String> {
     let FindInFileParams { filename } = params;
@@ -82,56 +70,27 @@ pub fn find_functions_in_file(
         .find_functions_in_file(&filename)
         .into_iter()
         .collect();
-    results.sort_by(|a, b| a.file.cmp(&b.file).then(a.name.cmp(&b.name)));
     if results.is_empty() {
         return Err(format!("No functions found in files matching '{filename}'"));
     }
-    // Group by file
-    let mut by_file: BTreeMap<&std::path::PathBuf, Vec<Value>> = BTreeMap::new();
-    for n in &results {
-        by_file
-            .entry(&n.file)
-            .or_default()
-            .push(compact_fn_entry(n));
-    }
-    let groups: Vec<Value> = by_file
-        .into_iter()
-        .map(|(file, fns)| json!({ "file": file, "functions": fns }))
-        .collect();
-    let content = if groups.len() == 1 {
-        groups.into_iter().next().unwrap()
-    } else {
-        json!(groups)
-    };
-    Ok(content)
-}
-
-pub fn get_public_api(graph: &CallGraph, params: FindInFileParams) -> Result<Value, String> {
-    let FindInFileParams { filename } = params;
-    let mut results: Vec<_> = graph.get_public_api(&filename).into_iter().collect();
     results.sort_by(|a, b| a.file.cmp(&b.file).then(a.name.cmp(&b.name)));
-    if results.is_empty() {
-        return Err(format!(
-            "No public (non-static) functions found in files matching '{filename}'"
-        ));
-    }
-    let mut by_file: BTreeMap<&std::path::PathBuf, Vec<Value>> = BTreeMap::new();
+    let mut by_file: serde_json::Map<String, Value> = serde_json::Map::new();
     for n in &results {
+        let mut obj = serde_json::Map::new();
+        obj.insert("name".into(), json!(n.name));
+        obj.insert("line".into(), json!(n.line));
+        obj.insert("static".into(), json!(n.is_static));
+        if !n.conditions.is_empty() {
+            obj.insert("conditions".into(), json!(n.conditions));
+        }
         by_file
-            .entry(&n.file)
-            .or_default()
-            .push(compact_fn_entry(n));
+            .entry(rel_file(root, &n.file))
+            .or_insert_with(|| json!([]))
+            .as_array_mut()
+            .unwrap()
+            .push(Value::Object(obj));
     }
-    let groups: Vec<Value> = by_file
-        .into_iter()
-        .map(|(file, fns)| json!({ "file": file, "functions": fns }))
-        .collect();
-    let content = if groups.len() == 1 {
-        groups.into_iter().next().unwrap()
-    } else {
-        json!(groups)
-    };
-    Ok(content)
+    Ok(Value::Object(by_file))
 }
 
 pub fn get_source(graph: &CallGraph, params: GetSourceParams) -> Result<Value, String> {
