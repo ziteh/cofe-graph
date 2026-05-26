@@ -17,7 +17,7 @@ async fn test_find_function() {
     let params = FindFunctionParams {
         name: "process_data".to_string(),
     };
-    let matches = find_function(&graph, params).unwrap();
+    let matches = find_function(&graph, std::path::Path::new(""), params).unwrap();
     let content = matches.as_array().unwrap();
 
     assert_eq!(

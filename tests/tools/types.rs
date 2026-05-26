@@ -24,7 +24,7 @@ async fn test_get_type_users() {
     let params = GetTypeUsersParams {
         name: "state_t".to_string(),
     };
-    match get_type_users(&graph, params) {
+    match get_type_users(&graph, std::path::Path::new(""), params) {
         Err(e) => assert!(e.contains("No functions reference type")),
         Ok(v) => assert!(v.is_array()),
     }
