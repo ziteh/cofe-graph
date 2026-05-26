@@ -48,10 +48,12 @@ impl CofeGraph {
     fn call_result(&self, result: Result<serde_json::Value, String>) -> CallToolResult {
         match result {
             Ok(value) => {
-                let text = if self.use_toon {
-                    toon_format::encode_default(&value).unwrap_or_else(|_| value.to_string())
-                } else {
-                    value.to_string()
+                let text = match value {
+                    serde_json::Value::String(s) => s,
+                    ref v if self.use_toon => {
+                        toon_format::encode_default(v).unwrap_or_else(|_| v.to_string())
+                    }
+                    ref v => v.to_string(),
                 };
                 CallToolResult::success(vec![Content::text(text)])
             }

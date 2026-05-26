@@ -138,15 +138,13 @@ pub fn get_source(graph: &CallGraph, params: GetSourceParams) -> Result<Value, S
     let GetSourceParams { name } = params;
     match graph.nodes.get(&name) {
         Some(n) => {
-            let mut obj = serde_json::Map::new();
-            obj.insert("file".into(), json!(n.file));
-            obj.insert("line".into(), json!(n.line));
-            obj.insert("static".into(), json!(n.is_static));
-            if !n.conditions.is_empty() {
-                obj.insert("conditions".into(), json!(n.conditions));
-            }
-            obj.insert("source".into(), json!(n.source));
-            Ok(Value::Object(obj))
+            let src_code = format!(
+                "// file: {}\n// line: {}\n\n{}",
+                n.file.display(),
+                n.line,
+                n.source.replace("\r\n", "\n")
+            );
+            Ok(json!(src_code))
         }
         None => Err(format!("Function '{name}' not found")),
     }
