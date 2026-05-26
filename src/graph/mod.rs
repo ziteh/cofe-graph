@@ -358,6 +358,43 @@ impl CallGraph {
     }
 }
 
+/// Merge a collection of per-file file graphs into a single call graph.
+pub fn merge_file_graphs(file_graphs: Vec<FileGraph>) -> CallGraph {
+    let mut g = CallGraph::default();
+    let mut all_candidates: HashSet<String> = HashSet::new();
+
+    for fg in file_graphs {
+        g.nodes.extend(fg.nodes);
+        for (caller, callees) in fg.callees {
+            for callee in &callees {
+                g.callers
+                    .entry(callee.clone())
+                    .or_default()
+                    .insert(caller.clone());
+            }
+            g.callees.entry(caller).or_default().extend(callees);
+        }
+        for (k, v) in fg.symbols {
+            g.symbols.entry(k).or_default().extend(v);
+        }
+        for (k, v) in fg.includes {
+            g.includes.entry(k).or_default().extend(v);
+        }
+        for (k, v) in fg.types {
+            g.types.entry(k).or_default().extend(v);
+        }
+        g.globals.extend(fg.globals);
+        all_candidates.extend(fg.macro_arg_candidates);
+    }
+
+    g.macro_referenced = all_candidates
+        .into_iter()
+        .filter(|id| g.nodes.contains_key(id))
+        .collect();
+
+    g
+}
+
 fn contains_word(text: &str, word: &str) -> bool {
     let bytes = text.as_bytes();
     let wbytes = word.as_bytes();

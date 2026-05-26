@@ -6,7 +6,7 @@ mod symbols;
 mod types;
 mod utils;
 
-pub use macro_refs::{collect_macro_refs, scan_macro_refs};
+pub use macro_refs::{collect_macro_arg_candidates, collect_macro_refs, scan_macro_refs};
 
 use anyhow::Result;
 use std::path::Path;

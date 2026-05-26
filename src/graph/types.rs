@@ -1,3 +1,4 @@
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
@@ -123,4 +124,18 @@ pub struct SymbolNode {
     pub value: Option<String>,
     pub file: PathBuf,
     pub line: u32,
+}
+
+#[derive(Default, Serialize, Deserialize)]
+pub struct FileGraph {
+    pub nodes: HashMap<String, FunctionNode>,
+    /// Forward edges: caller → set of callees (all defined in this file)
+    pub callees: HashMap<String, HashSet<String>>,
+    pub symbols: HashMap<String, Vec<SymbolNode>>,
+    pub includes: HashMap<PathBuf, Vec<IncludeEdge>>,
+    pub types: HashMap<String, Vec<TypeNode>>,
+    pub globals: HashMap<String, GlobalVar>,
+    /// Raw identifiers found in macro-argument positions within this file,
+    /// before filtering by known function names.
+    pub macro_arg_candidates: HashSet<String>,
 }
