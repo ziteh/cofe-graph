@@ -93,16 +93,19 @@ pub fn find_functions_in_file(
     Ok(Value::Object(by_file))
 }
 
-pub fn get_source(graph: &CallGraph, params: GetSourceParams) -> Result<Value, String> {
+pub fn get_source(
+    graph: &CallGraph,
+    store: &crate::annotations::AnnotationStore,
+    params: GetSourceParams,
+) -> Result<Value, String> {
     let GetSourceParams { name } = params;
     match graph.nodes.get(&name) {
         Some(n) => {
-            let src_code = format!(
-                "// file: {}\n// line: {}\n\n{}",
-                n.file.display(),
-                n.line,
-                n.source.replace("\r\n", "\n")
-            );
+            let mut header = format!("// file: {}\n// line: {}", n.file.display(), n.line);
+            if let Some(sym_ann) = store.get_symbol(&name, &n.source) {
+                header.push_str(&format!("\n// annotation: {}", sym_ann.insight));
+            }
+            let src_code = format!("{}\n\n{}", header, n.source.replace("\r\n", "\n"));
             Ok(json!(src_code))
         }
         None => Err(format!("Function '{name}' not found")),

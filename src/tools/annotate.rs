@@ -17,10 +17,20 @@ pub struct AnnotateFileParams {
     pub subsystem: String,
     #[schemars(description = "Description of what this file does")]
     pub summary: String,
-    #[schemars(description = "Names of key/important functions in this file")]
-    pub key_functions: Vec<String>,
-    #[schemars(description = "Optional additional notes or observations")]
+    #[schemars(
+        description = "Free-form notes: interrupt context, cross-file dependencies, design decisions"
+    )]
     pub notes: Option<String>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct AnnotateSymbolParams {
+    #[schemars(description = "Exact function, global variable, or type name to annotate")]
+    pub name: String,
+    #[schemars(
+        description = "Free-form semantic insight — interrupt context, ownership rules, invariants, design intent"
+    )]
+    pub insight: String,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
@@ -35,6 +45,26 @@ pub struct FileContextParams {
         description = "Filename substring — must match exactly one indexed file (case-insensitive)"
     )]
     pub filename: String,
+}
+
+/// BLAKE3 hash of a symbol's source/definition text (first 16 hex chars).
+fn compute_symbol_hash(graph: &CallGraph, name: &str) -> Option<String> {
+    if let Some(n) = graph.nodes.get(name) {
+        let hash = blake3::hash(n.source.as_bytes());
+        return Some(hash.to_hex()[..16].to_string());
+    }
+    if let Some(nodes) = graph.types.get(name) {
+        let mut hasher = blake3::Hasher::new();
+        for t in nodes {
+            hasher.update(t.definition.as_bytes());
+        }
+        return Some(hasher.finalize().to_hex()[..16].to_string());
+    }
+    if let Some(g) = graph.globals.get(name) {
+        let hash = blake3::hash(g.decl.as_bytes());
+        return Some(hash.to_hex()[..16].to_string());
+    }
+    None
 }
 
 /// BLAKE3 of sorted function sources for a specific file, first 16 hex chars.
@@ -94,13 +124,31 @@ pub fn annotate_file(
         FileAnnotation {
             subsystem: p.subsystem,
             summary: p.summary,
-            key_functions: p.key_functions,
             notes: p.notes,
             file_hash,
         },
     );
     store.save();
     Ok(json!({"ok": true, "file": file}))
+}
+
+pub fn annotate_symbol(
+    graph: &CallGraph,
+    store: &mut AnnotationStore,
+    p: AnnotateSymbolParams,
+) -> Result<Value, String> {
+    let source_hash = compute_symbol_hash(graph, &p.name).ok_or_else(|| {
+        format!(
+            "No function, type, or global named '{}' found in index",
+            p.name
+        )
+    })?;
+    store.symbols.entry(p.name.clone()).or_default().insert(
+        source_hash,
+        crate::annotations::SymbolAnnotation { insight: p.insight },
+    );
+    store.save();
+    Ok(json!({"ok": true, "symbol": p.name}))
 }
 
 pub fn get_file_annotation(
@@ -126,7 +174,6 @@ pub fn get_file_annotation(
                 "file": file,
                 "subsystem": ann.subsystem,
                 "summary": ann.summary,
-                "key_functions": ann.key_functions,
                 "notes": ann.notes,
                 "stale": current_hash != ann.file_hash,
             })
@@ -158,26 +205,57 @@ pub fn list_file_annotations(graph: &CallGraph, store: &AnnotationStore) -> Resu
     Ok(json!({"count": results.len(), "files": results}))
 }
 
-pub fn list_unannotated_files(graph: &CallGraph, store: &AnnotationStore) -> Result<Value, String> {
-    let files = all_files(graph);
-    let mut unannotated: Vec<(&String, usize)> = files
-        .iter()
-        .filter(|f| !store.files.contains_key(*f))
-        .map(|f| {
-            let fn_count = graph
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct ListUnannotatedParams {
+    #[schemars(
+        description = "File path substring — omit to list unannotated files; provide to list unannotated functions within that file"
+    )]
+    pub file: Option<String>,
+}
+
+pub fn list_unannotated(
+    graph: &CallGraph,
+    store: &AnnotationStore,
+    p: ListUnannotatedParams,
+) -> Result<Value, String> {
+    match p.file {
+        None => {
+            let files = all_files(graph);
+            let mut unannotated: Vec<(&String, usize)> = files
+                .iter()
+                .filter(|f| !store.files.contains_key(*f))
+                .map(|f| {
+                    let fn_count = graph
+                        .nodes
+                        .values()
+                        .filter(|n| n.file.to_string_lossy() == f.as_str())
+                        .count();
+                    (f, fn_count)
+                })
+                .collect();
+            unannotated.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(b.0)));
+            let results: Vec<_> = unannotated
+                .into_iter()
+                .map(|(f, fn_count)| json!({"file": f, "function_count": fn_count}))
+                .collect();
+            Ok(json!({"count": results.len(), "files": results}))
+        }
+        Some(file_substr) => {
+            let file = match_one_file(graph, &file_substr)?;
+            let mut fns: Vec<_> = graph
                 .nodes
                 .values()
-                .filter(|n| n.file.to_string_lossy() == f.as_str())
-                .count();
-            (f, fn_count)
-        })
-        .collect();
-    unannotated.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(b.0)));
-    let results: Vec<_> = unannotated
-        .into_iter()
-        .map(|(f, fn_count)| json!({"file": f, "function_count": fn_count}))
-        .collect();
-    Ok(json!({"count": results.len(), "files": results}))
+                .filter(|n| n.file.to_string_lossy() == file.as_str())
+                .filter(|n| store.get_symbol(&n.name, &n.source).is_none())
+                .collect();
+            fns.sort_by_key(|n| n.line);
+            let results: Vec<_> = fns
+                .iter()
+                .map(|n| json!({"name": n.name, "line": n.line}))
+                .collect();
+            Ok(json!({"file": file, "count": results.len(), "functions": results}))
+        }
+    }
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
@@ -233,6 +311,7 @@ pub fn get_file_context(
                 "callee_count": callee_count,
                 "callees": callees,
                 "source": n.source,
+                "annotation": store.get_symbol(&n.name, &n.source).map(|s| s.insight.as_str()),
             })
         })
         .collect();
@@ -269,7 +348,6 @@ pub fn get_file_context(
         json!({
             "subsystem": ann.subsystem,
             "summary": ann.summary,
-            "key_functions": ann.key_functions,
             "notes": ann.notes,
             "stale": current_hash != ann.file_hash,
         })

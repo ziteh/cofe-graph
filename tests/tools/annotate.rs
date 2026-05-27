@@ -1,7 +1,7 @@
 use cofe_graph::annotations::AnnotationStore;
 use cofe_graph::tools::annotate::{
-    AnnotateFileParams, FileContextParams, FilePathParams, annotate_file, get_file_annotation,
-    get_file_context, list_file_annotations, list_unannotated_files,
+    AnnotateFileParams, FileContextParams, FilePathParams, ListUnannotatedParams, annotate_file,
+    get_file_annotation, get_file_context, list_file_annotations, list_unannotated,
 };
 
 fn empty_store() -> AnnotationStore {
@@ -13,7 +13,6 @@ fn annotate_params(path: &str, subsystem: &str) -> AnnotateFileParams {
         path: path.to_string(),
         subsystem: subsystem.to_string(),
         summary: format!("{subsystem} module"),
-        key_functions: vec![],
         notes: None,
     }
 }
@@ -190,7 +189,7 @@ async fn test_list_unannotated_files_all_missing() {
     let graph = g.read().await;
     let store = empty_store();
 
-    let v = list_unannotated_files(&graph, &store).unwrap();
+    let v = list_unannotated(&graph, &store, ListUnannotatedParams { file: None }).unwrap();
 
     assert_eq!(v["count"], 2);
 
@@ -211,7 +210,7 @@ async fn test_list_unannotated_files_partial() {
 
     let _ = annotate_file(&graph, &mut store, annotate_params("foo.c", "Foo"));
 
-    let v = list_unannotated_files(&graph, &store).unwrap();
+    let v = list_unannotated(&graph, &store, ListUnannotatedParams { file: None }).unwrap();
 
     assert_eq!(v["count"], 1);
     assert!(v["files"][0]["file"].as_str().unwrap().contains("bar"));
