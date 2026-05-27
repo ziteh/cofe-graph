@@ -2,6 +2,24 @@
 
 A code graph RAG MCP server for embedded C. Inspired by [CodeGraph](https://github.com/colbymchenry/codegraph).
 
+## MCP Tools
+
+| Tool                     | Description                                                   |
+| ------------------------ | ------------------------------------------------------------- |
+| `index_project`          | Re-index the project directory                                |
+| `search`                 | Find functions, types, and symbols by name                    |
+| `traverse`               | BFS callers or callees of one or more functions               |
+| `get_source`             | Get the full source code of a function                        |
+| `get_path`               | Find the call path from one function to another               |
+| `find_dead_code`         | List functions never called                                   |
+| `find_functions_in_file` | List all functions in files                                   |
+| `get_globals`            | List file-scope global variable declarations in files         |
+| `find_users`             | Find all functions referencing a global variable or type name |
+| `includes`               | Query `#include` relationships                                |
+| `annotate_file`          | Write a semantic annotation for a file                        |
+| `get_annotations`        | Retrieve annotations for files matching a path substring      |
+| `get_file_context`       | Full analysis bundle for a single file                        |
+
 ## Usage
 
 `.mcp.json`

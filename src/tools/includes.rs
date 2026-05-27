@@ -57,3 +57,26 @@ pub fn get_includers(graph: &CallGraph, params: GetIncludersParams) -> Result<Va
         .collect();
     Ok(json!(includers))
 }
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct IncludesParams {
+    #[schemars(
+        description = "Search term: filename substring (outbound) or header name substring (inbound)"
+    )]
+    pub target: String,
+    #[schemars(
+        description = "\"outbound\" — list #includes in files matching target; \"inbound\" — find files that #include target header"
+    )]
+    pub direction: String,
+}
+
+pub fn includes(graph: &CallGraph, params: IncludesParams) -> Result<Value, String> {
+    let IncludesParams { target, direction } = params;
+    match direction.as_str() {
+        "outbound" => get_includes(graph, GetIncludesParams { file: target }),
+        "inbound" => get_includers(graph, GetIncludersParams { header: target }),
+        _ => Err(format!(
+            "direction must be 'outbound' or 'inbound', got '{direction}'"
+        )),
+    }
+}

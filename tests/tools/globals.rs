@@ -1,5 +1,5 @@
+use cofe_graph::tools::functions::FindInFileParams;
 use cofe_graph::tools::globals::get_globals;
-use cofe_graph::tools::includes::GetIncludesParams;
 
 #[tokio::test]
 async fn test_get_globals() {
@@ -10,8 +10,8 @@ async fn test_get_globals() {
     .await;
     let graph = graph_lock.read().await;
 
-    let params = GetIncludesParams {
-        file: "app.c".to_string(),
+    let params = FindInFileParams {
+        filename: "app.c".to_string(),
     };
     let v = get_globals(&graph, std::path::Path::new(""), params).unwrap();
     let content = v.as_array().expect("Expected array with global variable");

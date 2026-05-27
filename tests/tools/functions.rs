@@ -51,12 +51,12 @@ async fn test_find_functions_in_file() {
     assert_eq!(fns.len(), 3, "Should find helper, init, work");
 
     let helper = fns.iter().find(|m| m["name"] == "helper").unwrap();
-    assert_eq!(helper["is_static"], true);
+    assert_eq!(helper["static"], true);
     assert!(helper.get("file").is_none(), "file should not be in entry");
 
     let init = fns.iter().find(|m| m["name"] == "init").unwrap();
-    assert_eq!(init["is_static"], false);
+    assert_eq!(init["static"], false);
 
     let work = fns.iter().find(|m| m["name"] == "work").unwrap();
-    assert_eq!(work["is_static"], false);
+    assert_eq!(work["static"], false);
 }

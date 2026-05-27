@@ -180,6 +180,25 @@ pub fn list_unannotated_files(graph: &CallGraph, store: &AnnotationStore) -> Res
     Ok(json!({"count": results.len(), "files": results}))
 }
 
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct GetAnnotationsParams {
+    #[schemars(
+        description = "File path substring to filter by — omit (or pass null) to list all annotated files"
+    )]
+    pub path: Option<String>,
+}
+
+pub fn get_annotations(
+    graph: &CallGraph,
+    store: &AnnotationStore,
+    p: GetAnnotationsParams,
+) -> Result<Value, String> {
+    match p.path {
+        Some(path) => get_file_annotation(graph, store, FilePathParams { path }),
+        None => list_file_annotations(graph, store),
+    }
+}
+
 pub fn get_file_context(
     graph: &CallGraph,
     store: &AnnotationStore,

@@ -1,7 +1,8 @@
+use rmcp::schemars;
+use serde::Deserialize;
 use serde_json::{Value, json};
 
-use super::functions::GetSourceParams;
-use super::includes::GetIncludesParams;
+use super::functions::{FindInFileParams, GetSourceParams};
 use super::rel_file;
 use super::types::GetTypeUsersParams;
 use crate::graph::CallGraph;
@@ -9,13 +10,13 @@ use crate::graph::CallGraph;
 pub fn get_globals(
     graph: &CallGraph,
     root: &std::path::Path,
-    params: GetIncludesParams,
+    params: FindInFileParams,
 ) -> Result<Value, String> {
-    let GetIncludesParams { file } = params;
-    let results = graph.find_globals(&file);
+    let FindInFileParams { filename } = params;
+    let results = graph.find_globals(&filename);
     if results.is_empty() {
         return Err(format!(
-            "No global variables found in files matching '{file}'"
+            "No global variables found in files matching '{filename}'"
         ));
     }
     let matches: Vec<Value> = results
@@ -58,6 +59,29 @@ pub fn get_global_users(
         })
         .collect();
     Ok(json!(users))
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct FindUsersParams {
+    #[schemars(description = "Name to search for (exact word-boundary match in function source)")]
+    pub name: String,
+    #[schemars(
+        description = "\"global\" — find functions referencing this global variable; \"type\" — find functions referencing this struct/enum/typedef"
+    )]
+    pub kind: String,
+}
+
+pub fn find_users(
+    graph: &CallGraph,
+    root: &std::path::Path,
+    params: FindUsersParams,
+) -> Result<Value, String> {
+    let FindUsersParams { name, kind } = params;
+    match kind.as_str() {
+        "global" => get_global_users(graph, root, GetTypeUsersParams { name }),
+        "type" => super::types::get_type_users(graph, root, GetTypeUsersParams { name }),
+        _ => Err(format!("kind must be 'global' or 'type', got '{kind}'")),
+    }
 }
 
 pub fn get_fn_globals(

@@ -9,12 +9,12 @@ use tokio::sync::RwLock;
 
 use crate::annotations::AnnotationStore;
 use crate::graph::CallGraph;
-use crate::tools::annotate::{AnnotateFileParams, FileContextParams, FilePathParams};
-use crate::tools::functions::{FindInFileParams, GetSourceParams, TopNParams};
-use crate::tools::includes::{GetIncludersParams, GetIncludesParams};
+use crate::tools::annotate::{AnnotateFileParams, FileContextParams, GetAnnotationsParams};
+use crate::tools::functions::{FindInFileParams, GetSourceParams};
+use crate::tools::globals::FindUsersParams;
+use crate::tools::includes::IncludesParams;
 use crate::tools::search::SearchParams;
-use crate::tools::traverse::{CalleesParams, CallersParams, GetPathParams};
-use crate::tools::types::GetTypeUsersParams;
+use crate::tools::traverse::{GetPathParams, TraverseParams};
 
 #[derive(Clone)]
 pub struct CofeGraph {
@@ -89,22 +89,11 @@ impl CofeGraph {
     }
 
     #[tool(
-        description = "Get all functions that call the given functions (BFS up to depth). Pass multiple names to batch related lookups into one call."
+        description = "Get callers or callees of the given functions (BFS up to depth). direction=\"callers\" returns who calls them; direction=\"callees\" returns what they call. Pass multiple names to batch."
     )]
-    async fn get_callers(&self, params: Parameters<CallersParams>) -> CallToolResult {
+    async fn traverse(&self, params: Parameters<TraverseParams>) -> CallToolResult {
         let Parameters(p) = params;
-        self.call_result(crate::tools::traverse::get_callers(
-            &*self.graph.read().await,
-            p,
-        ))
-    }
-
-    #[tool(
-        description = "Get all functions called by the given functions (BFS up to depth). Pass multiple names to batch related lookups into one call."
-    )]
-    async fn get_callees(&self, params: Parameters<CalleesParams>) -> CallToolResult {
-        let Parameters(p) = params;
-        self.call_result(crate::tools::traverse::get_callees(
+        self.call_result(crate::tools::traverse::traverse(
             &*self.graph.read().await,
             p,
         ))
@@ -152,7 +141,7 @@ impl CofeGraph {
     #[tool(
         description = "List file-scope (global) variable declarations in files matching a filename substring"
     )]
-    async fn get_globals(&self, params: Parameters<GetIncludesParams>) -> CallToolResult {
+    async fn get_globals(&self, params: Parameters<FindInFileParams>) -> CallToolResult {
         let Parameters(p) = params;
         self.call_result(crate::tools::globals::get_globals(
             &*self.graph.read().await,
@@ -162,11 +151,11 @@ impl CofeGraph {
     }
 
     #[tool(
-        description = "Find all functions that reference a global variable by name (word-boundary match in function source)"
+        description = "Find all functions that reference a global variable or type name in their source. kind=\"global\" for variable references, kind=\"type\" for struct/enum/typedef references (exact word match)."
     )]
-    async fn get_global_users(&self, params: Parameters<GetTypeUsersParams>) -> CallToolResult {
+    async fn find_users(&self, params: Parameters<FindUsersParams>) -> CallToolResult {
         let Parameters(p) = params;
-        self.call_result(crate::tools::globals::get_global_users(
+        self.call_result(crate::tools::globals::find_users(
             &*self.graph.read().await,
             &self.project_path,
             p,
@@ -174,43 +163,11 @@ impl CofeGraph {
     }
 
     #[tool(
-        description = "Find all functions that reference a given type name in their source (exact word match)"
+        description = "Query #include relationships. direction=\"outbound\": list all #includes in files matching target filename; direction=\"inbound\": find all files that #include the target header."
     )]
-    async fn get_type_users(&self, params: Parameters<GetTypeUsersParams>) -> CallToolResult {
+    async fn includes(&self, params: Parameters<IncludesParams>) -> CallToolResult {
         let Parameters(p) = params;
-        self.call_result(crate::tools::types::get_type_users(
-            &*self.graph.read().await,
-            &self.project_path,
-            p,
-        ))
-    }
-
-    #[tool(description = "List all #include directives in files matching a filename substring")]
-    async fn get_includes(&self, params: Parameters<GetIncludesParams>) -> CallToolResult {
-        let Parameters(p) = params;
-        self.call_result(crate::tools::includes::get_includes(
-            &*self.graph.read().await,
-            p,
-        ))
-    }
-
-    #[tool(
-        description = "Find all files that #include a given header (substring match on the include path)"
-    )]
-    async fn get_includers(&self, params: Parameters<GetIncludersParams>) -> CallToolResult {
-        let Parameters(p) = params;
-        self.call_result(crate::tools::includes::get_includers(
-            &*self.graph.read().await,
-            p,
-        ))
-    }
-
-    #[tool(
-        description = "List the top N functions by fan-in (most callers) — these are shared utilities or hotspots"
-    )]
-    async fn find_high_fan_in(&self, params: Parameters<TopNParams>) -> CallToolResult {
-        let Parameters(p) = params;
-        self.call_result(crate::tools::functions::find_high_fan_in(
+        self.call_result(crate::tools::includes::includes(
             &*self.graph.read().await,
             p,
         ))
@@ -227,24 +184,13 @@ impl CofeGraph {
     }
 
     #[tool(
-        description = "Retrieve the stored annotation(s) for files matching a path substring, with a stale flag if the file has changed since annotation"
+        description = "Get annotation(s) for matching files with stale flag, or list all annotated files if path is omitted"
     )]
-    async fn get_file_annotation(&self, params: Parameters<FilePathParams>) -> CallToolResult {
+    async fn get_annotations(&self, params: Parameters<GetAnnotationsParams>) -> CallToolResult {
         let Parameters(p) = params;
         let graph = self.graph.read().await;
         let store = self.annotations.read().await;
-        self.call_result(crate::tools::annotate::get_file_annotation(
-            &graph, &store, p,
-        ))
-    }
-
-    #[tool(description = "List all annotated files with their subsystem and staleness status")]
-    async fn list_file_annotations(&self) -> CallToolResult {
-        let graph = self.graph.read().await;
-        let store = self.annotations.read().await;
-        self.call_result(crate::tools::annotate::list_file_annotations(
-            &graph, &store,
-        ))
+        self.call_result(crate::tools::annotate::get_annotations(&graph, &store, p))
     }
 
     #[tool(
