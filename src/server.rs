@@ -223,7 +223,7 @@ impl CofeGraph {
     }
 
     #[tool(
-        description = "Return a full analysis bundle for a single file: all functions with source and call statistics, globals, types, and any existing annotation. Use this to gather context before calling annotate_file. Path must match exactly one indexed file."
+        description = "Return a full analysis bundle for a single file: all functions with call statistics, globals, types, and any existing annotation. Use get_source to fetch individual function source. Path must match exactly one indexed file."
     )]
     async fn get_file_context(&self, params: Parameters<FileContextParams>) -> CallToolResult {
         let Parameters(p) = params;

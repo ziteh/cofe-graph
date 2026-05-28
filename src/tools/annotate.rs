@@ -305,12 +305,11 @@ pub fn get_file_context(
             json!({
                 "name": n.name,
                 "line": n.line,
-                "is_static": n.is_static,
+                "static": n.is_static,
                 "conditions": n.conditions,
                 "caller_count": caller_count,
                 "callee_count": callee_count,
                 "callees": callees,
-                "source": n.source,
                 "annotation": store.get_symbol(&n.name, &n.source).map(|s| s.insight.as_str()),
             })
         })
@@ -324,7 +323,7 @@ pub fn get_file_context(
             json!({
                 "name": g.name,
                 "decl": g.decl,
-                "is_static": g.is_static,
+                "static": g.is_static,
                 "conditions": g.conditions,
             })
         })
