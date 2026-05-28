@@ -1,13 +1,18 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use rmcp::handler::server::router::prompt::PromptRouter;
 use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{
-    CallToolResult, Content, ListResourcesResult, RawResource, ReadResourceRequestParams,
-    ReadResourceResult, Resource, ResourceContents, ServerCapabilities, ServerInfo,
+    CallToolResult, Content, GetPromptRequestParams, GetPromptResult, ListPromptsResult,
+    ListResourcesResult, PaginatedRequestParams, PromptMessage, PromptMessageRole, RawResource,
+    ReadResourceRequestParams, ReadResourceResult, Resource, ResourceContents, ServerCapabilities,
+    ServerInfo,
 };
-use rmcp::{ServerHandler, tool, tool_handler, tool_router};
+use rmcp::schemars;
+use rmcp::service::{RequestContext, RoleServer};
+use rmcp::{ServerHandler, prompt, prompt_handler, prompt_router, tool, tool_handler, tool_router};
 use tokio::sync::RwLock;
 
 use crate::annotations::AnnotationStore;
@@ -22,6 +27,12 @@ use crate::tools::includes::IncludesParams;
 use crate::tools::search::SearchParams;
 use crate::tools::traverse::{GetPathParams, TraverseParams};
 
+#[derive(serde::Deserialize, schemars::JsonSchema)]
+pub struct ExploreArgs {
+    /// Optional focus: a file name, subsystem, or function name to centre the exploration on.
+    pub focus: Option<String>,
+}
+
 #[derive(Clone)]
 pub struct CofeGraph {
     pub(crate) graph: Arc<RwLock<CallGraph>>,
@@ -30,6 +41,7 @@ pub struct CofeGraph {
     use_toon: bool,
     max_cache_entries: usize,
     tool_router: ToolRouter<Self>,
+    prompt_router: PromptRouter<Self>,
 }
 
 impl CofeGraph {
@@ -48,6 +60,7 @@ impl CofeGraph {
             use_toon,
             max_cache_entries,
             tool_router: Self::tool_router(),
+            prompt_router: Self::prompt_router(),
         }
     }
 
@@ -65,6 +78,100 @@ impl CofeGraph {
             }
             Err(e) => CallToolResult::error(vec![Content::text(e)]),
         }
+    }
+}
+
+#[prompt_router]
+impl CofeGraph {
+    #[prompt(
+        name = "explore_codebase",
+        description = "Step-by-step instructions for an AI agent to explore an indexed C codebase with cofe-graph tools and produce a structured summary."
+    )]
+    async fn explore_codebase(
+        &self,
+        Parameters(args): Parameters<ExploreArgs>,
+    ) -> Result<Vec<PromptMessage>, rmcp::ErrorData> {
+        let focus_preamble = if let Some(ref f) = args.focus {
+            format!(
+                "**Focused exploration mode**: concentrate on `{f}` (file, subsystem, or \
+                 function). Apply each step below with that scope in mind; call tools with \
+                 arguments that match or are related to `{f}`. Still produce a full summary at \
+                 the end but emphasise the focused area.\n\n"
+            )
+        } else {
+            String::new()
+        };
+
+        let body = format!(
+            r#"{focus_preamble}You have access to a cofe-graph MCP server that has already indexed \
+a C codebase. Follow these steps in order to understand the codebase and write a \
+structured summary. Call tools as you go; do not skip steps.
+
+## Step 1 — Verify the index
+Call `index_project`. Note the returned file, function, type, and symbol counts. \
+If it reports 0 files, the index is empty — stop and ask the user to check the project path.
+
+## Step 2 — Broad overview
+From the Step 1 response extract: total files, total functions, total types, total symbols. \
+Then call `find_dead_code`. Skim the dead-code list to get a sense of the codebase health.
+
+## Step 3 — Module structure
+Identify the top 5–10 most important source files (by function count or by filename heuristics \
+such as `main`, `init`, `core`, `app`).
+For each important file:
+- Call `find_functions_in_file` with the filename substring.
+- Call `get_file_context` with the exact relative path.
+- Call `includes direction="outbound"` to see its dependencies.
+
+## Step 4 — Entry points and call flow
+Search for likely entry points: call `search` with queries like `main`, `init`, `start`, `run`, \
+`task`, `handler`.
+For each entry-point function found:
+- Call `traverse direction="callees" depth=3` to map what it calls.
+- Call `traverse direction="callers"` to confirm it is a root.
+Pick the 2–3 most significant call chains and call `get_path` between distant pairs.
+
+## Step 5 — Key types and globals
+Call `search kind="type"` to list all struct/union/enum/typedef definitions.
+For each frequently-used type (appears in many functions):
+- Call `find_users kind="type"` to see which functions use it.
+For the most important global variables:
+- Call `get_globals` with a relevant filename substring.
+- Call `find_users kind="global"` to see which functions read or write it.
+
+## Step 6 — Read key source
+Choose 3–5 of the most central or interesting functions identified so far.
+Call `get_source` on each. Read the implementation to understand the core logic.
+
+## Step 7 — Produce the summary
+Write a structured summary with exactly these sections:
+
+### 1. Project Overview
+One paragraph: what the project does, language/platform, approximate size \
+(files / functions / types).
+
+### 2. Module Breakdown
+A table or bullet list: filename → responsibility (one sentence each).
+
+### 3. Entry Points and Startup Flow
+Describe how the program starts and what the main execution paths are.
+
+### 4. Key Data Structures
+List the most important structs/enums/types with a one-sentence description of their role.
+
+### 5. Core Algorithms and Subsystems
+Describe 2–5 key algorithms or subsystems: what they do and which functions implement them.
+
+### 6. Dead Code and Maintenance Notes
+Summarise the dead-code findings: counts by category, notable suspicious entries.
+
+### 7. Patterns and Conventions
+Note any recurring patterns: naming conventions, error-handling style, memory management \
+approach, use of macros, ISR/interrupt patterns, RTOS primitives, etc.
+"#
+        );
+
+        Ok(vec![PromptMessage::new_text(PromptMessageRole::User, body)])
     }
 }
 
@@ -236,6 +343,7 @@ impl CofeGraph {
     }
 }
 
+#[prompt_handler(router = self.prompt_router)]
 #[tool_handler(router = self.tool_router)]
 impl ServerHandler for CofeGraph {
     fn get_info(&self) -> ServerInfo {
@@ -243,6 +351,7 @@ impl ServerHandler for CofeGraph {
             ServerCapabilities::builder()
                 .enable_tools()
                 .enable_resources()
+                .enable_prompts()
                 .build(),
         )
         .with_instructions("GraphRAG tools for C code analysis. The project is indexed automatically at startup. Use index_project to re-index after source changes. Usage guides are available as MCP resources: cofe://quick-reference, cofe://rules-of-thumb, cofe://workflows")
