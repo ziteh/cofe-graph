@@ -1,0 +1,22 @@
+# Quick Reference
+
+| Question                                             | Tool                              |
+| ---------------------------------------------------- | --------------------------------- |
+| Where is function / type / macro X defined?          | `search`                          |
+| Who calls function X?                                | `traverse` `direction="callers"`  |
+| What does function X call?                           | `traverse` `direction="callees"`  |
+| Show the call path from X to Y                       | `get_path`                        |
+| Show me the source of function X                     | `get_source`                      |
+| What functions are defined in `foo.c`?               | `find_functions_in_file`          |
+| What global variables does `foo.c` declare?          | `get_globals`                     |
+| Which functions reference global variable X?         | `find_users` `kind="global"`      |
+| Which functions use struct / type X?                 | `find_users` `kind="type"`        |
+| What does `foo.c` `#include`?                        | `includes` `direction="outbound"` |
+| Which files include `bar.h`?                         | `includes` `direction="inbound"`  |
+| Find functions that are never called                 | `find_dead_code`                  |
+| Give me the full analysis bundle for `foo.c`         | `get_file_context`                |
+| Source files changed — rebuild the index             | `index_project`                   |
+| Read stored annotations for `foo.c`                  | `get_annotations`                 |
+| Write a semantic annotation for a file               | `annotate_file`                   |
+| Write a semantic annotation for a function or symbol | `annotate_symbol`                 |
+| What hasn't been annotated yet?                      | `list_unannotated`                |

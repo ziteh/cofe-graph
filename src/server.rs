@@ -3,7 +3,10 @@ use std::sync::Arc;
 
 use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::handler::server::wrapper::Parameters;
-use rmcp::model::{CallToolResult, Content, ServerCapabilities, ServerInfo};
+use rmcp::model::{
+    CallToolResult, Content, ListResourcesResult, RawResource, ReadResourceRequestParams,
+    ReadResourceResult, Resource, ResourceContents, ServerCapabilities, ServerInfo,
+};
 use rmcp::{ServerHandler, tool, tool_handler, tool_router};
 use tokio::sync::RwLock;
 
@@ -236,7 +239,53 @@ impl CofeGraph {
 #[tool_handler(router = self.tool_router)]
 impl ServerHandler for CofeGraph {
     fn get_info(&self) -> ServerInfo {
-        ServerInfo::new(ServerCapabilities::builder().enable_tools().build())
-            .with_instructions("GraphRAG tools for C code analysis. The project is indexed automatically at startup. Use index_project to re-index after source changes.")
+        ServerInfo::new(
+            ServerCapabilities::builder()
+                .enable_tools()
+                .enable_resources()
+                .build(),
+        )
+        .with_instructions("GraphRAG tools for C code analysis. The project is indexed automatically at startup. Use index_project to re-index after source changes. Usage guides are available as MCP resources: cofe://quick-reference, cofe://rules-of-thumb, cofe://workflows")
+    }
+
+    async fn list_resources(
+        &self,
+        _request: Option<rmcp::model::PaginatedRequestParams>,
+        _context: rmcp::service::RequestContext<rmcp::service::RoleServer>,
+    ) -> Result<ListResourcesResult, rmcp::ErrorData> {
+        let items: Vec<Resource> = crate::resources::RESOURCES
+            .iter()
+            .map(|(uri, name, desc, _)| {
+                Resource::new(
+                    RawResource::new(*uri, *name)
+                        .with_description(*desc)
+                        .with_mime_type("text/markdown"),
+                    None,
+                )
+            })
+            .collect();
+        Ok(ListResourcesResult::with_all_items(items))
+    }
+
+    async fn read_resource(
+        &self,
+        request: ReadResourceRequestParams,
+        _context: rmcp::service::RequestContext<rmcp::service::RoleServer>,
+    ) -> Result<ReadResourceResult, rmcp::ErrorData> {
+        let body = crate::resources::RESOURCES
+            .iter()
+            .find(|(uri, _, _, _)| *uri == request.uri)
+            .map(|(_, _, _, body)| *body)
+            .ok_or_else(|| {
+                rmcp::model::ErrorData::new(
+                    rmcp::model::ErrorCode::RESOURCE_NOT_FOUND,
+                    format!("Unknown resource: {}", request.uri),
+                    None,
+                )
+            })?;
+        let contents = vec![
+            ResourceContents::text(body.to_owned(), &request.uri).with_mime_type("text/markdown"),
+        ];
+        Ok(ReadResourceResult::new(contents))
     }
 }
