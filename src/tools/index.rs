@@ -103,9 +103,10 @@ pub async fn index_sources(
 pub async fn index_project(
     graph: Arc<RwLock<CallGraph>>,
     path: &Path,
-    max_cache_entries: usize,
+    max_l1_entries: usize,
+    max_l2_entries: usize,
 ) -> Result<Value, String> {
-    let cache = Cache::open(path, max_cache_entries);
+    let cache = Cache::open(path, max_l1_entries, max_l2_entries);
 
     // L1: full-graph hit
     if let Some(ref c) = cache

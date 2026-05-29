@@ -39,26 +39,33 @@ pub struct GraphAnalyzer {
     pub(crate) annotations: Arc<RwLock<AnnotationStore>>,
     pub(crate) project_path: PathBuf,
     use_toon: bool,
-    max_cache_entries: usize,
+    max_l1_entries: usize,
+    max_l2_entries: usize,
     tool_router: ToolRouter<Self>,
     prompt_router: PromptRouter<Self>,
 }
 
 impl GraphAnalyzer {
-    pub fn new(path: PathBuf, use_toon: bool, max_cache_entries: usize) -> Self {
+    pub fn new(
+        path: PathBuf,
+        use_toon: bool,
+        max_l1_entries: usize,
+        max_l2_entries: usize,
+    ) -> Self {
         let graph = Arc::new(RwLock::new(CallGraph::default()));
         let annotations = Arc::new(RwLock::new(AnnotationStore::load(&path)));
         let g = Arc::clone(&graph);
         let p = path.clone();
         tokio::spawn(async move {
-            let _ = crate::tools::index::index_project(g, &p, max_cache_entries).await;
+            let _ = crate::tools::index::index_project(g, &p, max_l1_entries, max_l2_entries).await;
         });
         Self {
             graph,
             annotations,
             project_path: path,
             use_toon,
-            max_cache_entries,
+            max_l1_entries,
+            max_l2_entries,
             tool_router: Self::tool_router(),
             prompt_router: Self::prompt_router(),
         }
@@ -183,7 +190,8 @@ impl GraphAnalyzer {
             crate::tools::index::index_project(
                 Arc::clone(&self.graph),
                 &self.project_path,
-                self.max_cache_entries,
+                self.max_l1_entries,
+                self.max_l2_entries,
             )
             .await,
         )
