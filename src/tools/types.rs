@@ -3,7 +3,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use super::rel_file;
-use crate::graph::CallGraph;
+use crate::graph::CodebaseGraph;
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct FindTypeParams {
@@ -19,7 +19,7 @@ pub struct GetTypeUsersParams {
     pub name: String,
 }
 
-pub fn find_type(graph: &CallGraph, params: FindTypeParams) -> Result<Value, String> {
+pub fn find_type(graph: &CodebaseGraph, params: FindTypeParams) -> Result<Value, String> {
     let FindTypeParams { name } = params;
     let results = graph.find_type(&name);
     if results.is_empty() {
@@ -44,7 +44,7 @@ pub fn find_type(graph: &CallGraph, params: FindTypeParams) -> Result<Value, Str
 }
 
 pub fn get_type_users(
-    graph: &CallGraph,
+    graph: &CodebaseGraph,
     root: &std::path::Path,
     params: GetTypeUsersParams,
 ) -> Result<Value, String> {

@@ -3,7 +3,7 @@ use std::path::Path;
 use streaming_iterator::StreamingIterator;
 use tree_sitter::{Language, Node, Query, QueryCursor};
 
-use crate::graph::{CallGraph, GlobalVar};
+use crate::graph::{CodebaseGraph, GlobalVar};
 
 const GLOBAL_DECL_QUERY: &str = r#"
 (declaration) @decl
@@ -14,7 +14,7 @@ pub fn parse_globals(
     source: &str,
     language: &Language,
     root: Node,
-    graph: &mut CallGraph,
+    graph: &mut CodebaseGraph,
 ) -> Result<()> {
     let src = source.as_bytes();
     let q = Query::new(language, GLOBAL_DECL_QUERY)?;

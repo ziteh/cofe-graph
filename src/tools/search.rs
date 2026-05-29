@@ -3,7 +3,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use super::rel_file;
-use crate::graph::CallGraph;
+use crate::graph::CodebaseGraph;
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct SearchParams {
@@ -16,7 +16,7 @@ pub struct SearchParams {
 }
 
 pub fn search(
-    graph: &CallGraph,
+    graph: &CodebaseGraph,
     root: &std::path::Path,
     params: SearchParams,
 ) -> Result<Value, String> {

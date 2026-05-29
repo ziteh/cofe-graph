@@ -5,10 +5,10 @@ use serde_json::{Value, json};
 use super::functions::{FindInFileParams, GetSourceParams};
 use super::rel_file;
 use super::types::GetTypeUsersParams;
-use crate::graph::CallGraph;
+use crate::graph::CodebaseGraph;
 
 pub fn get_globals(
-    graph: &CallGraph,
+    graph: &CodebaseGraph,
     root: &std::path::Path,
     params: FindInFileParams,
 ) -> Result<Value, String> {
@@ -38,7 +38,7 @@ pub fn get_globals(
 }
 
 pub fn get_global_users(
-    graph: &CallGraph,
+    graph: &CodebaseGraph,
     root: &std::path::Path,
     params: GetTypeUsersParams,
 ) -> Result<Value, String> {
@@ -72,7 +72,7 @@ pub struct FindUsersParams {
 }
 
 pub fn find_users(
-    graph: &CallGraph,
+    graph: &CodebaseGraph,
     root: &std::path::Path,
     params: FindUsersParams,
 ) -> Result<Value, String> {
@@ -85,7 +85,7 @@ pub fn find_users(
 }
 
 pub fn get_fn_globals(
-    graph: &CallGraph,
+    graph: &CodebaseGraph,
     root: &std::path::Path,
     params: GetSourceParams,
 ) -> Result<Value, String> {

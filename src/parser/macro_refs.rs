@@ -2,7 +2,7 @@ use anyhow::Result;
 use streaming_iterator::StreamingIterator;
 use tree_sitter::{Language, Parser, Query, QueryCursor};
 
-use crate::graph::CallGraph;
+use crate::graph::CodebaseGraph;
 
 const MACRO_ARG_QUERY: &str = r#"
 (call_expression
@@ -19,7 +19,7 @@ fn is_macro_name(name: &str) -> bool {
 
 /// Scan for function names that appear as arguments to macro calls.
 /// Must be called after all files have been parsed (needs graph.nodes to be populated).
-pub fn scan_macro_refs(source: &str, graph: &mut CallGraph) -> Result<()> {
+pub fn scan_macro_refs(source: &str, graph: &mut CodebaseGraph) -> Result<()> {
     let language: Language = tree_sitter_c::LANGUAGE.into();
     let mut parser = Parser::new();
     parser.set_language(&language)?;

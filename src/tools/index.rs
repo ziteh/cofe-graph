@@ -8,19 +8,19 @@ use walkdir::WalkDir;
 use serde_json::{Value, json};
 
 use crate::cache::Cache;
-use crate::graph::{CallGraph, FileGraph};
+use crate::graph::{CodebaseGraph, FileGraph};
 
 /// Parse `(path, source)` pairs into the graph.
 /// Returns `(files_ok, files_err)`.
-fn parse_sources_into_graph(g: &mut CallGraph, sources: &[(&Path, &str)]) -> (usize, usize) {
+fn parse_sources_into_graph(g: &mut CodebaseGraph, sources: &[(&Path, &str)]) -> (usize, usize) {
     let start = std::time::Instant::now();
 
     // Phase 1: parse files in parallel into isolated local graphs
     let phase1_start = std::time::Instant::now();
-    let results: Vec<(&Path, &str, anyhow::Result<CallGraph>)> = sources
+    let results: Vec<(&Path, &str, anyhow::Result<CodebaseGraph>)> = sources
         .par_iter()
         .map(|&(path, src)| {
-            let mut local = CallGraph::default();
+            let mut local = CodebaseGraph::default();
             let res = crate::parser::parse_file(path, src, &mut local).map(|_| local);
             (path, src, res)
         })
@@ -78,7 +78,7 @@ fn parse_sources_into_graph(g: &mut CallGraph, sources: &[(&Path, &str)]) -> (us
 
 /// Index from in-memory sources.
 pub async fn index_sources(
-    graph: Arc<RwLock<CallGraph>>,
+    graph: Arc<RwLock<CodebaseGraph>>,
     sources: &[(&Path, &str)],
 ) -> Result<Value, String> {
     let mut g = graph.write().await;
@@ -101,7 +101,7 @@ pub async fn index_sources(
 
 /// Index from filesystem path.
 pub async fn index_project(
-    graph: Arc<RwLock<CallGraph>>,
+    graph: Arc<RwLock<CodebaseGraph>>,
     path: &Path,
     max_l1_entries: usize,
     max_l2_entries: usize,
@@ -214,7 +214,7 @@ pub async fn index_project(
         }
     }
 
-    // Merge all FileGraphs → CallGraph
+    // Merge all FileGraphs → CodebaseGraph
     let merged = crate::graph::merge_file_graphs(file_graphs);
     let fn_count = merged.nodes.len();
     let edge_count: usize = merged.callees.values().map(|s| s.len()).sum();
@@ -250,7 +250,7 @@ pub async fn index_project(
 
 /// Parse a single source file into a file graph.
 fn parse_file_to_graph(path: &Path, src: &str) -> anyhow::Result<FileGraph> {
-    let mut local = CallGraph::default();
+    let mut local = CodebaseGraph::default();
     crate::parser::parse_file(path, src, &mut local)?;
     let macro_arg_candidates = crate::parser::collect_macro_arg_candidates(src).unwrap_or_default();
     Ok(FileGraph {

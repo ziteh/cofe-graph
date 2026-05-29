@@ -14,7 +14,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use crate::graph::{CallGraph, FileGraph};
+use crate::graph::{CodebaseGraph, FileGraph};
 
 pub const DATA_DIR_NAME: &str = ".cofe-graph";
 
@@ -57,7 +57,7 @@ impl Cache {
     /// Load the full graph for the current HEAD.
     /// Returns `None` if L1 is disabled or on cache miss.
     /// Touches the file's mtime on hit.
-    pub fn load(&self) -> Option<CallGraph> {
+    pub fn load(&self) -> Option<CodebaseGraph> {
         if self.max_l1_entries == 0 {
             return None;
         }
@@ -70,7 +70,7 @@ impl Cache {
 
     /// Persist the full graph under the current HEAD key,
     /// then run mtime-based eviction. No-op if L1 is disabled.
-    pub fn save(&self, graph: &CallGraph) {
+    pub fn save(&self, graph: &CodebaseGraph) {
         if self.max_l1_entries == 0 {
             return;
         }

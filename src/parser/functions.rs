@@ -3,7 +3,7 @@ use std::path::Path;
 use streaming_iterator::StreamingIterator;
 use tree_sitter::{Language, Node, Query, QueryCursor};
 
-use crate::graph::{CallGraph, FunctionNode};
+use crate::graph::{CodebaseGraph, FunctionNode};
 
 /// Returns `Some((prefix_text, first_comment_line_1based))` when at least one comment is found, `None` otherwise.
 fn collect_leading_comment_prefix(dn: Node<'_>, src: &[u8]) -> Option<(String, u32)> {
@@ -63,7 +63,7 @@ pub fn parse_functions(
     source: &str,
     language: &Language,
     root: Node,
-    graph: &mut CallGraph,
+    graph: &mut CodebaseGraph,
 ) -> Result<()> {
     let src = source.as_bytes();
     let fn_query = Query::new(language, FUNCTION_DEF_QUERY)?;

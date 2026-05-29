@@ -2,7 +2,7 @@ use rmcp::schemars;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::graph::CallGraph;
+use crate::graph::CodebaseGraph;
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct FindSymbolParams {
@@ -12,7 +12,7 @@ pub struct FindSymbolParams {
     pub name: String,
 }
 
-pub fn find_symbol(graph: &CallGraph, params: FindSymbolParams) -> Result<Value, String> {
+pub fn find_symbol(graph: &CodebaseGraph, params: FindSymbolParams) -> Result<Value, String> {
     let FindSymbolParams { name } = params;
     let results = graph.find_symbol(&name);
     if results.is_empty() {

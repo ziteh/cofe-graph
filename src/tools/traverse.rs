@@ -2,7 +2,7 @@ use rmcp::schemars;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::graph::CallGraph;
+use crate::graph::CodebaseGraph;
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct CallersParams {
@@ -32,7 +32,7 @@ pub struct GetPathParams {
     pub to: String,
 }
 
-pub fn get_callers(graph: &CallGraph, params: CallersParams) -> Result<Value, String> {
+pub fn get_callers(graph: &CodebaseGraph, params: CallersParams) -> Result<Value, String> {
     let CallersParams { names, depth } = params;
     let d = depth.unwrap_or(1) as usize;
     let mut result = serde_json::Map::new();
@@ -49,7 +49,7 @@ pub fn get_callers(graph: &CallGraph, params: CallersParams) -> Result<Value, St
     Ok(Value::Object(result))
 }
 
-pub fn get_callees(graph: &CallGraph, params: CalleesParams) -> Result<Value, String> {
+pub fn get_callees(graph: &CodebaseGraph, params: CalleesParams) -> Result<Value, String> {
     let CalleesParams { names, depth } = params;
     let d = depth.unwrap_or(1) as usize;
     let mut result = serde_json::Map::new();
@@ -66,7 +66,7 @@ pub fn get_callees(graph: &CallGraph, params: CalleesParams) -> Result<Value, St
     Ok(Value::Object(result))
 }
 
-pub fn get_path(graph: &CallGraph, params: GetPathParams) -> Result<Value, String> {
+pub fn get_path(graph: &CodebaseGraph, params: GetPathParams) -> Result<Value, String> {
     let GetPathParams { from, to } = params;
     match graph.find_path(&from, &to) {
         Some(path) => Ok(json!({"from": from, "to": to, "path": path})),
@@ -88,7 +88,7 @@ pub struct TraverseParams {
     pub direction: String,
 }
 
-pub fn traverse(graph: &CallGraph, params: TraverseParams) -> Result<Value, String> {
+pub fn traverse(graph: &CodebaseGraph, params: TraverseParams) -> Result<Value, String> {
     let TraverseParams {
         names,
         depth,

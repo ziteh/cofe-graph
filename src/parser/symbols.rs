@@ -4,7 +4,7 @@ use streaming_iterator::StreamingIterator;
 use tree_sitter::{Language, Node, Query, QueryCursor};
 
 use super::utils::{cap_text, cap_text_opt, trim_value};
-use crate::graph::{CallGraph, SymbolKind, SymbolNode};
+use crate::graph::{CodebaseGraph, SymbolKind, SymbolNode};
 
 const DEFINE_QUERY: &str = r#"
 (preproc_def
@@ -30,7 +30,7 @@ pub fn parse_symbols(
     source: &str,
     language: &Language,
     root: Node,
-    graph: &mut CallGraph,
+    graph: &mut CodebaseGraph,
 ) -> Result<()> {
     let src = source.as_bytes();
 

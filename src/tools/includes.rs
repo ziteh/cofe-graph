@@ -2,7 +2,7 @@ use rmcp::schemars;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::graph::CallGraph;
+use crate::graph::CodebaseGraph;
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct GetIncludesParams {
@@ -20,7 +20,7 @@ pub struct GetIncludersParams {
     pub header: String,
 }
 
-pub fn get_includes(graph: &CallGraph, params: GetIncludesParams) -> Result<Value, String> {
+pub fn get_includes(graph: &CodebaseGraph, params: GetIncludesParams) -> Result<Value, String> {
     let GetIncludesParams { file } = params;
     let results = graph.get_includes(&file);
     if results.is_empty() {
@@ -39,7 +39,7 @@ pub fn get_includes(graph: &CallGraph, params: GetIncludesParams) -> Result<Valu
     Ok(json!(entries))
 }
 
-pub fn get_includers(graph: &CallGraph, params: GetIncludersParams) -> Result<Value, String> {
+pub fn get_includers(graph: &CodebaseGraph, params: GetIncludersParams) -> Result<Value, String> {
     let GetIncludersParams { header } = params;
     let results = graph.get_includers(&header);
     if results.is_empty() {
@@ -70,7 +70,7 @@ pub struct IncludesParams {
     pub direction: String,
 }
 
-pub fn includes(graph: &CallGraph, params: IncludesParams) -> Result<Value, String> {
+pub fn includes(graph: &CodebaseGraph, params: IncludesParams) -> Result<Value, String> {
     let IncludesParams { target, direction } = params;
     match direction.as_str() {
         "outbound" => get_includes(graph, GetIncludesParams { file: target }),

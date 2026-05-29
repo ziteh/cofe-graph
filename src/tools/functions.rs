@@ -3,7 +3,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use super::rel_file;
-use crate::graph::CallGraph;
+use crate::graph::CodebaseGraph;
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct FindFunctionParams {
@@ -42,7 +42,7 @@ fn fn_entry(n: &crate::graph::FunctionNode, root: &std::path::Path) -> Value {
 }
 
 pub fn find_function(
-    graph: &CallGraph,
+    graph: &CodebaseGraph,
     root: &std::path::Path,
     params: FindFunctionParams,
 ) -> Result<Value, String> {
@@ -61,7 +61,7 @@ pub fn find_function(
 }
 
 pub fn find_functions_in_file(
-    graph: &CallGraph,
+    graph: &CodebaseGraph,
     root: &std::path::Path,
     params: FindInFileParams,
 ) -> Result<Value, String> {
@@ -94,7 +94,7 @@ pub fn find_functions_in_file(
 }
 
 pub fn get_source(
-    graph: &CallGraph,
+    graph: &CodebaseGraph,
     store: &crate::annotations::AnnotationStore,
     params: GetSourceParams,
 ) -> Result<Value, String> {
@@ -112,7 +112,7 @@ pub fn get_source(
     }
 }
 
-pub fn find_high_fan_in(graph: &CallGraph, params: TopNParams) -> Result<Value, String> {
+pub fn find_high_fan_in(graph: &CodebaseGraph, params: TopNParams) -> Result<Value, String> {
     let TopNParams { top_n } = params;
     let ranked = graph.top_by_fan_in(top_n.unwrap_or(10) as usize);
     if ranked.is_empty() {

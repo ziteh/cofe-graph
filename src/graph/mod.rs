@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
 #[derive(Default, Serialize, Deserialize)]
-pub struct CallGraph {
+pub struct CodebaseGraph {
     /// All function nodes, keyed by function name
     pub nodes: HashMap<String, FunctionNode>,
     /// Reverse index: key is the callee, value is the set of functions that call it
@@ -26,7 +26,7 @@ pub struct CallGraph {
     pub globals: HashMap<String, GlobalVar>,
 }
 
-impl CallGraph {
+impl CodebaseGraph {
     pub fn insert_node(&mut self, node: FunctionNode) {
         self.nodes.insert(node.name.clone(), node);
     }
@@ -53,7 +53,7 @@ impl CallGraph {
         self.globals.clear();
     }
 
-    pub fn merge(&mut self, other: CallGraph) {
+    pub fn merge(&mut self, other: CodebaseGraph) {
         self.nodes.extend(other.nodes);
         for (k, v) in other.callees {
             self.callees.entry(k).or_default().extend(v);
@@ -359,8 +359,8 @@ impl CallGraph {
 }
 
 /// Merge a collection of per-file file graphs into a single call graph.
-pub fn merge_file_graphs(file_graphs: Vec<FileGraph>) -> CallGraph {
-    let mut g = CallGraph::default();
+pub fn merge_file_graphs(file_graphs: Vec<FileGraph>) -> CodebaseGraph {
+    let mut g = CodebaseGraph::default();
     let mut all_candidates: HashSet<String> = HashSet::new();
 
     for fg in file_graphs {

@@ -3,14 +3,14 @@ use std::path::Path;
 use streaming_iterator::StreamingIterator;
 use tree_sitter::{Language, Node, Query, QueryCursor};
 
-use crate::graph::{CallGraph, IncludeEdge};
+use crate::graph::{CodebaseGraph, IncludeEdge};
 
 pub fn parse_includes(
     path: &Path,
     source: &str,
     language: &Language,
     root: Node,
-    graph: &mut CallGraph,
+    graph: &mut CodebaseGraph,
 ) -> Result<()> {
     let q = Query::new(language, "(preproc_include path: (_) @path)")?;
     let path_idx = q.capture_index_for_name("path").unwrap();

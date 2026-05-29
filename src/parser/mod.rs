@@ -12,9 +12,9 @@ use anyhow::Result;
 use std::path::Path;
 use tree_sitter::{Language, Parser};
 
-use crate::graph::CallGraph;
+use crate::graph::CodebaseGraph;
 
-pub fn parse_file(path: &Path, source: &str, graph: &mut CallGraph) -> Result<()> {
+pub fn parse_file(path: &Path, source: &str, graph: &mut CodebaseGraph) -> Result<()> {
     let language: Language = tree_sitter_c::LANGUAGE.into();
     let mut parser = Parser::new();
     parser.set_language(&language)?;
@@ -38,8 +38,8 @@ mod tests {
     use super::*;
     use std::path::PathBuf;
 
-    fn build_fixture_graph() -> CallGraph {
-        let mut graph = CallGraph::default();
+    fn build_fixture_graph() -> CodebaseGraph {
+        let mut graph = CodebaseGraph::default();
         let fixtures = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
         for name in ["math.c", "main.c"] {
             let path = fixtures.join(name);

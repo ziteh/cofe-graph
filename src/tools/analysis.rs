@@ -1,8 +1,8 @@
 use serde_json::{Value, json};
 
-use crate::graph::{CallGraph, DeadCodeKind, FunctionNode};
+use crate::graph::{CodebaseGraph, DeadCodeKind, FunctionNode};
 
-pub fn find_dead_code(graph: &CallGraph) -> Result<Value, String> {
+pub fn find_dead_code(graph: &CodebaseGraph) -> Result<Value, String> {
     let mut dead = graph.find_dead_code();
     dead.sort_by_key(|(n, _)| &n.name);
 
@@ -47,7 +47,7 @@ pub fn find_dead_code(graph: &CallGraph) -> Result<Value, String> {
     }))
 }
 
-pub fn get_stats(graph: &CallGraph) -> Result<Value, String> {
+pub fn get_stats(graph: &CodebaseGraph) -> Result<Value, String> {
     let fn_count = graph.nodes.len();
     let edge_count: usize = graph.callees.values().map(|s| s.len()).sum();
     let dead = graph.find_dead_code();

@@ -3,7 +3,7 @@ use std::path::Path;
 use streaming_iterator::StreamingIterator;
 use tree_sitter::{Language, Node, Query, QueryCursor};
 
-use crate::graph::{CallGraph, TypeKind, TypeNode};
+use crate::graph::{CodebaseGraph, TypeKind, TypeNode};
 
 // Named struct: struct foo_t { ... };
 const STRUCT_QUERY: &str = r#"
@@ -37,7 +37,7 @@ pub fn parse_types(
     source: &str,
     language: &Language,
     root: Node,
-    graph: &mut CallGraph,
+    graph: &mut CodebaseGraph,
 ) -> Result<()> {
     let src = source.as_bytes();
     let specs: &[(&str, TypeKind)] = &[

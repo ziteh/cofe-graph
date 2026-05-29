@@ -16,7 +16,7 @@ use rmcp::{ServerHandler, prompt, prompt_handler, prompt_router, tool, tool_hand
 use tokio::sync::RwLock;
 
 use crate::annotations::AnnotationStore;
-use crate::graph::CallGraph;
+use crate::graph::CodebaseGraph;
 use crate::tools::annotate::{
     AnnotateFileParams, AnnotateSymbolParams, FileContextParams, GetAnnotationsParams,
     ListUnannotatedParams,
@@ -35,7 +35,7 @@ pub struct ExploreArgs {
 
 #[derive(Clone)]
 pub struct GraphAnalyzer {
-    pub(crate) graph: Arc<RwLock<CallGraph>>,
+    pub(crate) graph: Arc<RwLock<CodebaseGraph>>,
     pub(crate) annotations: Arc<RwLock<AnnotationStore>>,
     pub(crate) project_path: PathBuf,
     use_toon: bool,
@@ -52,7 +52,7 @@ impl GraphAnalyzer {
         max_l1_entries: usize,
         max_l2_entries: usize,
     ) -> Self {
-        let graph = Arc::new(RwLock::new(CallGraph::default()));
+        let graph = Arc::new(RwLock::new(CodebaseGraph::default()));
         let annotations = Arc::new(RwLock::new(AnnotationStore::load(&path)));
         let g = Arc::clone(&graph);
         let p = path.clone();

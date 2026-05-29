@@ -5,7 +5,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use crate::annotations::{AnnotationStore, FileAnnotation};
-use crate::graph::CallGraph;
+use crate::graph::CodebaseGraph;
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct AnnotateFileParams {
@@ -48,7 +48,7 @@ pub struct FileContextParams {
 }
 
 /// BLAKE3 hash of a symbol's source/definition text (first 16 hex chars).
-fn compute_symbol_hash(graph: &CallGraph, name: &str) -> Option<String> {
+fn compute_symbol_hash(graph: &CodebaseGraph, name: &str) -> Option<String> {
     if let Some(n) = graph.nodes.get(name) {
         let hash = blake3::hash(n.source.as_bytes());
         return Some(hash.to_hex()[..16].to_string());
@@ -68,7 +68,7 @@ fn compute_symbol_hash(graph: &CallGraph, name: &str) -> Option<String> {
 }
 
 /// BLAKE3 of sorted function sources for a specific file, first 16 hex chars.
-fn compute_hash(graph: &CallGraph, file_path: &str) -> String {
+fn compute_hash(graph: &CodebaseGraph, file_path: &str) -> String {
     let mut sources: Vec<&str> = graph
         .nodes
         .values()
@@ -84,7 +84,7 @@ fn compute_hash(graph: &CallGraph, file_path: &str) -> String {
 }
 
 /// All unique file paths that have at least one function node, sorted.
-fn all_files(graph: &CallGraph) -> Vec<String> {
+fn all_files(graph: &CodebaseGraph) -> Vec<String> {
     let set: HashSet<String> = graph
         .nodes
         .values()
@@ -96,7 +96,7 @@ fn all_files(graph: &CallGraph) -> Vec<String> {
 }
 
 /// Returns the single file path matching `substr`, or an error string.
-fn match_one_file(graph: &CallGraph, substr: &str) -> Result<String, String> {
+fn match_one_file(graph: &CodebaseGraph, substr: &str) -> Result<String, String> {
     let q = substr.to_lowercase();
     let matches: Vec<String> = all_files(graph)
         .into_iter()
@@ -113,7 +113,7 @@ fn match_one_file(graph: &CallGraph, substr: &str) -> Result<String, String> {
 }
 
 pub fn annotate_file(
-    graph: &CallGraph,
+    graph: &CodebaseGraph,
     store: &mut AnnotationStore,
     p: AnnotateFileParams,
 ) -> Result<Value, String> {
@@ -133,7 +133,7 @@ pub fn annotate_file(
 }
 
 pub fn annotate_symbol(
-    graph: &CallGraph,
+    graph: &CodebaseGraph,
     store: &mut AnnotationStore,
     p: AnnotateSymbolParams,
 ) -> Result<Value, String> {
@@ -152,7 +152,7 @@ pub fn annotate_symbol(
 }
 
 pub fn get_file_annotation(
-    graph: &CallGraph,
+    graph: &CodebaseGraph,
     store: &AnnotationStore,
     p: FilePathParams,
 ) -> Result<Value, String> {
@@ -182,7 +182,10 @@ pub fn get_file_annotation(
     Ok(json!({"found": true, "results": results}))
 }
 
-pub fn list_file_annotations(graph: &CallGraph, store: &AnnotationStore) -> Result<Value, String> {
+pub fn list_file_annotations(
+    graph: &CodebaseGraph,
+    store: &AnnotationStore,
+) -> Result<Value, String> {
     let mut entries: Vec<_> = store
         .files
         .iter()
@@ -214,7 +217,7 @@ pub struct ListUnannotatedParams {
 }
 
 pub fn list_unannotated(
-    graph: &CallGraph,
+    graph: &CodebaseGraph,
     store: &AnnotationStore,
     p: ListUnannotatedParams,
 ) -> Result<Value, String> {
@@ -267,7 +270,7 @@ pub struct GetAnnotationsParams {
 }
 
 pub fn get_annotations(
-    graph: &CallGraph,
+    graph: &CodebaseGraph,
     store: &AnnotationStore,
     p: GetAnnotationsParams,
 ) -> Result<Value, String> {
@@ -278,7 +281,7 @@ pub fn get_annotations(
 }
 
 pub fn get_file_context(
-    graph: &CallGraph,
+    graph: &CodebaseGraph,
     store: &AnnotationStore,
     p: FileContextParams,
 ) -> Result<Value, String> {
