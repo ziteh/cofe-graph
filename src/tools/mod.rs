@@ -1,5 +1,4 @@
 pub mod analysis;
-pub mod annotate;
 pub mod functions;
 pub mod globals;
 pub mod includes;

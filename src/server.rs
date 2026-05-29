@@ -15,12 +15,7 @@ use rmcp::service::{RequestContext, RoleServer};
 use rmcp::{ServerHandler, prompt, prompt_handler, prompt_router, tool, tool_handler, tool_router};
 use tokio::sync::RwLock;
 
-use crate::annotations::AnnotationStore;
 use crate::graph::CodebaseGraph;
-use crate::tools::annotate::{
-    AnnotateFileParams, AnnotateSymbolParams, FileContextParams, GetAnnotationsParams,
-    ListUnannotatedParams,
-};
 use crate::tools::functions::{FindInFileParams, GetSourceParams};
 use crate::tools::globals::FindUsersParams;
 use crate::tools::includes::IncludesParams;
@@ -36,7 +31,6 @@ pub struct ExploreArgs {
 #[derive(Clone)]
 pub struct GraphAnalyzer {
     pub(crate) graph: Arc<RwLock<CodebaseGraph>>,
-    pub(crate) annotations: Arc<RwLock<AnnotationStore>>,
     pub(crate) project_path: PathBuf,
     use_toon: bool,
     max_l1_entries: usize,
@@ -53,7 +47,6 @@ impl GraphAnalyzer {
         max_l2_entries: usize,
     ) -> Self {
         let graph = Arc::new(RwLock::new(CodebaseGraph::default()));
-        let annotations = Arc::new(RwLock::new(AnnotationStore::load(&path)));
         let g = Arc::clone(&graph);
         let p = path.clone();
         tokio::spawn(async move {
@@ -61,7 +54,6 @@ impl GraphAnalyzer {
         });
         Self {
             graph,
-            annotations,
             project_path: path,
             use_toon,
             max_l1_entries,
@@ -220,15 +212,11 @@ impl GraphAnalyzer {
         ))
     }
 
-    #[tool(
-        description = "Get the source code of a function by exact name; includes any stored semantic annotation"
-    )]
+    #[tool(description = "Get the source code of a function by exact name")]
     async fn get_source(&self, params: Parameters<GetSourceParams>) -> CallToolResult {
         let Parameters(p) = params;
-        let store = self.annotations.read().await;
         self.call_result(crate::tools::functions::get_source(
             &*self.graph.read().await,
-            &store,
             p,
         ))
     }
@@ -296,58 +284,6 @@ impl GraphAnalyzer {
             &*self.graph.read().await,
             p,
         ))
-    }
-
-    #[tool(
-        description = "Write a semantic annotation for a file (subsystem, summary, notes). Stores the current file hash for staleness detection. Path must match exactly one indexed file."
-    )]
-    async fn annotate_file(&self, params: Parameters<AnnotateFileParams>) -> CallToolResult {
-        let Parameters(p) = params;
-        let graph = self.graph.read().await;
-        let mut store = self.annotations.write().await;
-        self.call_result(crate::tools::annotate::annotate_file(&graph, &mut store, p))
-    }
-
-    #[tool(
-        description = "Write a semantic annotation for a specific function, type, or global variable. Use insight to capture interrupt context, ownership rules, invariants, or design intent that tree-sitter cannot infer."
-    )]
-    async fn annotate_symbol(&self, params: Parameters<AnnotateSymbolParams>) -> CallToolResult {
-        let Parameters(p) = params;
-        let graph = self.graph.read().await;
-        let mut store = self.annotations.write().await;
-        self.call_result(crate::tools::annotate::annotate_symbol(
-            &graph, &mut store, p,
-        ))
-    }
-
-    #[tool(
-        description = "Get annotation(s) for matching files with stale flag, or list all annotated files if path is omitted"
-    )]
-    async fn get_annotations(&self, params: Parameters<GetAnnotationsParams>) -> CallToolResult {
-        let Parameters(p) = params;
-        let graph = self.graph.read().await;
-        let store = self.annotations.read().await;
-        self.call_result(crate::tools::annotate::get_annotations(&graph, &store, p))
-    }
-
-    #[tool(
-        description = "List unannotated items. Without 'file': list files with no annotation yet, sorted by function count. With 'file': list functions in that file that have no symbol annotation for their current source."
-    )]
-    async fn list_unannotated(&self, params: Parameters<ListUnannotatedParams>) -> CallToolResult {
-        let Parameters(p) = params;
-        let graph = self.graph.read().await;
-        let store = self.annotations.read().await;
-        self.call_result(crate::tools::annotate::list_unannotated(&graph, &store, p))
-    }
-
-    #[tool(
-        description = "Return a full analysis bundle for a single file: all functions with call statistics, globals, types, and any existing annotation. Use get_source to fetch individual function source. Path must match exactly one indexed file."
-    )]
-    async fn get_file_context(&self, params: Parameters<FileContextParams>) -> CallToolResult {
-        let Parameters(p) = params;
-        let graph = self.graph.read().await;
-        let store = self.annotations.read().await;
-        self.call_result(crate::tools::annotate::get_file_context(&graph, &store, p))
     }
 }
 

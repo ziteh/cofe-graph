@@ -93,18 +93,11 @@ pub fn find_functions_in_file(
     Ok(Value::Object(by_file))
 }
 
-pub fn get_source(
-    graph: &CodebaseGraph,
-    store: &crate::annotations::AnnotationStore,
-    params: GetSourceParams,
-) -> Result<Value, String> {
+pub fn get_source(graph: &CodebaseGraph, params: GetSourceParams) -> Result<Value, String> {
     let GetSourceParams { name } = params;
     match graph.nodes.get(&name) {
         Some(n) => {
-            let mut header = format!("// file: {}\n// line: {}", n.file.display(), n.line);
-            if let Some(sym_ann) = store.get_symbol(&name, &n.source) {
-                header.push_str(&format!("\n// annotation: {}", sym_ann.insight));
-            }
+            let header = format!("// file: {}\n// line: {}", n.file.display(), n.line);
             let src_code = format!("{}\n\n{}", header, n.source.replace("\r\n", "\n"));
             Ok(json!(src_code))
         }
