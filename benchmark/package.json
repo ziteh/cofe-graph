@@ -1,5 +1,5 @@
 {
-  "name": "cofe-graph-benchmark",
+  "name": "benchmark",
   "version": "0.0.0",
   "type": "module",
   "scripts": {

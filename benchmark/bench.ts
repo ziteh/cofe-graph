@@ -1,9 +1,9 @@
 #!/usr/bin/env tsx
 /**
- * bench.ts — RAG vs no-RAG benchmark for cofe-graph MCP server
+ * bench.ts — RAG vs no-RAG benchmark for code indexer MCP server
  *
  * Measures AI agent response quality on Flipper Zero firmware C code understanding,
- * comparing results with and without cofe-graph as a RAG tool via MCP.
+ * comparing results with and without code analysis as a RAG tool via MCP.
  *
  * Usage:
  *   npx tsx bench.ts --model <model> --base-url <url> [options]
@@ -95,10 +95,10 @@ const OC_BUILTIN_TOOLS = new Set([
   "webfetch",
 ]);
 
-function findCofeBin(override?: string): string {
+function findServerBinary(override?: string): string {
   if (override) {
     if (!existsSync(override)) {
-      throw new Error(`cofe-graph binary not found: ${override}`);
+      throw new Error(`Server binary not found: ${override}`);
     }
     return override;
   }
@@ -110,7 +110,7 @@ function findCofeBin(override?: string): string {
     if (existsSync(candidate)) return candidate;
   }
   throw new Error(
-    "cofe-graph binary not found. Build it first:\n  cargo build --release"
+    "Server binary not found. Build it first:\n  cargo build --release"
   );
 }
 
@@ -131,7 +131,7 @@ function runOpencode(
   apiKey: string,
   projectPath: string,
   withMcp: boolean,
-  cofeBin?: string
+  serverBinary?: string
 ): [string, ToolCallLog[], { input_tokens: number; output_tokens: number }] {
   let tmpDir: string | undefined;
   try {
@@ -158,11 +158,11 @@ function runOpencode(
       },
     };
 
-    if (withMcp && cofeBin) {
+    if (withMcp && serverBinary) {
       config["mcp"] = {
         cg: {
           type: "local",
-          command: [cofeBin, actualDir, "--quiet"],
+          command: [serverBinary, actualDir, "--quiet"],
           enabled: true,
         },
       };
@@ -262,7 +262,7 @@ function main(): void {
   const program = new Command();
   program
     .description(
-      "Benchmark AI agent with/without cofe-graph MCP RAG on Flipper Zero firmware C code understanding."
+      "Benchmark AI agent with/without code indexer MCP RAG on Flipper Zero firmware C code understanding."
     )
     .requiredOption("--model <model>", "Model name (e.g. qwen2.5-coder:7b, openai/gpt-4o)")
     .requiredOption(
@@ -277,12 +277,12 @@ function main(): void {
     )
     .option("--question <ids...>", "Run only specific question IDs, e.g. --question Q1 Q3")
     .option(
-      "--cofe-graph-bin <path>",
-      "Path to cofe-graph binary (default: auto-detect release then debug)"
+      "--bin <path>",
+      "Path to server binary (default: auto-detect release then debug)"
     )
     .option(
       "--project-path <path>",
-      "Project path for cofe-graph indexing (default: tests/flipperzero-firmware-dev/applications)"
+      "Project path to analyze"
     )
     .parse(process.argv);
 
@@ -292,7 +292,7 @@ function main(): void {
     apiKey?: string;
     condition: string;
     question?: string[];
-    cofeGraphBin?: string;
+    bin?: string;
     projectPath?: string;
   }>();
 
@@ -338,11 +338,11 @@ function main(): void {
   const conditions: string[] =
     opts.condition === "both" ? ["with", "without"] : [opts.condition];
 
-  let cofeBin: string | undefined;
+  let serverBinary: string | undefined;
   if (conditions.includes("with")) {
     try {
-      cofeBin = findCofeBin(opts.cofeGraphBin);
-      console.log(`[bench] cofe-graph binary : ${cofeBin}`);
+      serverBinary = findServerBinary(opts.bin);
+      console.log(`[bench] server binary : ${serverBinary}`);
     } catch (err) {
       console.error(`[error] ${(err as Error).message}`);
       process.exit(1);
@@ -368,7 +368,7 @@ function main(): void {
         apiKey,
         projectPath,
         condition === "with",
-        condition === "with" ? cofeBin : undefined
+        condition === "with" ? serverBinary : undefined
       );
 
       const duration = (performance.now() - t0) / 1000;

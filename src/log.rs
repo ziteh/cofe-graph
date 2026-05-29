@@ -8,7 +8,7 @@ pub fn init(log_dir: &Path, quiet: bool) -> WorkerGuard {
 
     std::fs::create_dir_all(log_dir).expect("cannot create log dir");
 
-    let file_appender = tracing_appender::rolling::daily(log_dir, "cofe-graph.log");
+    let file_appender = tracing_appender::rolling::daily(log_dir, "log");
     let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
 
     let file_layer = fmt::layer()

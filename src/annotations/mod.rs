@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
-use crate::cache::COFE_DATA_DIR;
+use crate::cache::DATA_DIR_NAME;
 
 #[derive(Deserialize, Default)]
 struct StoredData {
@@ -35,7 +35,7 @@ impl AnnotationStore {
 
 impl AnnotationStore {
     pub fn load(base: &Path) -> Self {
-        let path = base.join(COFE_DATA_DIR).join("annotations.json");
+        let path = base.join(DATA_DIR_NAME).join("annotations.json");
         let data: StoredData = std::fs::read_to_string(&path)
             .ok()
             .and_then(|s| serde_json::from_str(&s).ok())

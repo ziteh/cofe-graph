@@ -4,19 +4,19 @@ pub const WORKFLOWS: &str = include_str!("workflows.md");
 
 pub const RESOURCES: &[(&str, &str, &str, &str)] = &[
     (
-        "cofe://quick-reference",
+        "graph://quick-reference",
         "Quick Reference",
-        "Question-to-tool lookup table for cofe-graph",
+        "Question-to-tool lookup table for code analysis",
         QUICK_REFERENCE,
     ),
     (
-        "cofe://rules-of-thumb",
+        "graph://rules-of-thumb",
         "Rules of Thumb",
-        "Best practices for using cofe-graph tools effectively",
+        "Best practices for using code analysis tools effectively",
         RULES_OF_THUMB,
     ),
     (
-        "cofe://workflows",
+        "graph://workflows",
         "Common Workflows",
         "Step-by-step guides for common code analysis tasks",
         WORKFLOWS,

@@ -1,6 +1,6 @@
 use anyhow::Result;
-use cofe_graph::cache::COFE_DATA_DIR;
-use cofe_graph::server::CofeGraph;
+use cofe_graph::cache::DATA_DIR_NAME;
+use cofe_graph::server::GraphAnalyzer;
 use rmcp::ServiceExt;
 use std::path::PathBuf;
 
@@ -15,7 +15,17 @@ struct Args {
 }
 
 fn parse_args() -> Result<Args> {
-    let args: Vec<String> = std::env::args().skip(1).collect();
+    let mut all_args = std::env::args();
+    let program_name = all_args
+        .next()
+        .and_then(|p| {
+            std::path::Path::new(&p)
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+        })
+        .unwrap_or_else(|| "app".to_string());
+
+    let args: Vec<String> = all_args.collect();
 
     let use_toon = args.contains(&"--toon".to_string());
 
@@ -33,7 +43,12 @@ fn parse_args() -> Result<Args> {
     let path = PathBuf::from(
         args.iter()
             .find(|a| !a.starts_with("--"))
-            .expect("usage: cofe-graph <project-path> [--toon] [--quiet] [--max-cache <N>]"),
+            .unwrap_or_else(|| {
+                panic!(
+                    "usage: {} <project-path> [--toon] [--quiet] [--max-cache <N>]",
+                    program_name
+                )
+            }),
     );
     anyhow::ensure!(
         path.is_dir(),
@@ -53,7 +68,7 @@ fn parse_args() -> Result<Args> {
 async fn main() -> Result<()> {
     let args = parse_args()?;
 
-    let log_dir = args.path.join(COFE_DATA_DIR).join("logs");
+    let log_dir = args.path.join(DATA_DIR_NAME).join("logs");
     let _log_guard = cofe_graph::log::init(&log_dir, args.quiet);
 
     // Start server
@@ -63,9 +78,9 @@ async fn main() -> Result<()> {
         max_cache = args.max_cache,
         "starting MCP server on stdio, and the web UI on http://localhost:{DEFAULT_WEBUI_PORT}",
     );
-    let cofe = CofeGraph::new(args.path, args.use_toon, args.max_cache);
-    tokio::spawn(cofe_graph::webui::start(cofe.clone(), DEFAULT_WEBUI_PORT));
-    let service = cofe.serve(rmcp::transport::stdio()).await?;
+    let server = GraphAnalyzer::new(args.path, args.use_toon, args.max_cache);
+    tokio::spawn(cofe_graph::webui::start(server.clone(), DEFAULT_WEBUI_PORT));
+    let service = server.serve(rmcp::transport::stdio()).await?;
     service.waiting().await?;
 
     Ok(())

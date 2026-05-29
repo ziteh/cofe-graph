@@ -34,7 +34,7 @@ pub struct ExploreArgs {
 }
 
 #[derive(Clone)]
-pub struct CofeGraph {
+pub struct GraphAnalyzer {
     pub(crate) graph: Arc<RwLock<CallGraph>>,
     pub(crate) annotations: Arc<RwLock<AnnotationStore>>,
     pub(crate) project_path: PathBuf,
@@ -44,7 +44,7 @@ pub struct CofeGraph {
     prompt_router: PromptRouter<Self>,
 }
 
-impl CofeGraph {
+impl GraphAnalyzer {
     pub fn new(path: PathBuf, use_toon: bool, max_cache_entries: usize) -> Self {
         let graph = Arc::new(RwLock::new(CallGraph::default()));
         let annotations = Arc::new(RwLock::new(AnnotationStore::load(&path)));
@@ -82,10 +82,10 @@ impl CofeGraph {
 }
 
 #[prompt_router]
-impl CofeGraph {
+impl GraphAnalyzer {
     #[prompt(
         name = "explore_codebase",
-        description = "Step-by-step instructions for an AI agent to explore an indexed C codebase with cofe-graph tools and produce a structured summary."
+        description = "Step-by-step instructions for an AI agent to explore an indexed C codebase with analysis tools and produce a structured summary."
     )]
     async fn explore_codebase(
         &self,
@@ -103,7 +103,7 @@ impl CofeGraph {
         };
 
         let body = format!(
-            r#"{focus_preamble}You have access to a cofe-graph MCP server that has already indexed \
+            r#"{focus_preamble}You have access to an MCP server that has already indexed \
 a C codebase. Follow these steps in order to understand the codebase and write a \
 structured summary. Call tools as you go; do not skip steps.
 
@@ -176,7 +176,7 @@ approach, use of macros, ISR/interrupt patterns, RTOS primitives, etc.
 }
 
 #[tool_router]
-impl CofeGraph {
+impl GraphAnalyzer {
     #[tool(description = "Re-index the project directory (use when source files have changed)")]
     async fn index_project(&self) -> CallToolResult {
         self.call_result(
@@ -345,7 +345,7 @@ impl CofeGraph {
 
 #[prompt_handler(router = self.prompt_router)]
 #[tool_handler(router = self.tool_router)]
-impl ServerHandler for CofeGraph {
+impl ServerHandler for GraphAnalyzer {
     fn get_info(&self) -> ServerInfo {
         ServerInfo::new(
             ServerCapabilities::builder()
@@ -354,7 +354,7 @@ impl ServerHandler for CofeGraph {
                 .enable_prompts()
                 .build(),
         )
-        .with_instructions("GraphRAG tools for C code analysis. The project is indexed automatically at startup. Use index_project to re-index after source changes. Usage guides are available as MCP resources: cofe://quick-reference, cofe://rules-of-thumb, cofe://workflows")
+        .with_instructions("GraphRAG tools for C code analysis. The project is indexed automatically at startup. Use index_project to re-index after source changes. Usage guides are available as MCP resources: graph://quick-reference, graph://rules-of-thumb, graph://workflows")
     }
 
     async fn list_resources(

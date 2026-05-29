@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 /**
- * judge.ts — blind LLM judge for cofe-graph benchmark
+ * judge.ts — blind LLM judge for benchmark
  *
  * Collects responses from one or more result directories, assigns random labels
  * (A, B, C …) so the judge cannot see which condition produced each answer, then
@@ -430,7 +430,7 @@ function cmdGenerate(resultDirs: string[], outDir: string, seed: number): void {
   mkdirSync(outDir, { recursive: true });
 
   const header =
-    "# cofe-graph Benchmark — Blind Judge Input\n" +
+    "# Benchmark — Blind Judge Input\n" +
     `# Seed: ${seed}    Tasks: ${foundIds.join(", ")}\n` +
     "#\n" +
     "# Instructions:\n" +
@@ -698,7 +698,7 @@ async function cmdRun(opts: {
   nRuns: number;
   condition: string;
   apiKey?: string;
-  cofeGraphBin?: string;
+  bin?: string;
   projectPath?: string;
   outDir?: string;
   seed?: number;
@@ -722,7 +722,7 @@ async function cmdRun(opts: {
       ...opts.questionIds,
     ];
     if (opts.apiKey) cmd.push("--api-key", opts.apiKey);
-    if (opts.cofeGraphBin) cmd.push("--cofe-graph-bin", opts.cofeGraphBin);
+    if (opts.bin) cmd.push("--bin", opts.bin);
     if (opts.projectPath) cmd.push("--project-path", opts.projectPath);
 
     let runDir: string | undefined;
@@ -798,7 +798,7 @@ async function cmdRun(opts: {
 async function main(): Promise<void> {
   const program = new Command();
   program
-    .description("Blind LLM judge for cofe-graph benchmark")
+    .description("Blind LLM judge for code analysis benchmark")
     .addHelpText(
       "after",
       `
@@ -829,8 +829,8 @@ Examples:
     .option("--condition <cond>", "Condition(s) to run: with | without | both", "both")
     .option("--question <ids...>", "Question IDs to benchmark, e.g. --question Q1 Q2")
     .option("--runs <n>", "Number of bench.ts runs", "1")
-    .option("--cofe-graph-bin <path>", "cofe-graph binary path")
-    .option("--project-path <path>", "Project path for cofe-graph")
+    .option("--bin <path>", "Server binary path")
+    .option("--project-path <path>", "Project path to analyze")
     .option("--judge-model <model>", "LLM model for auto-judging responses")
     .option("--judge-base-url <url>", "Base URL for judge LLM (defaults to --base-url)")
     .option("--judge-api-key <key>", "API key for judge LLM (defaults to --api-key)")
@@ -849,7 +849,7 @@ Examples:
     condition: string;
     question?: string[];
     runs: string;
-    cofeGraphBin?: string;
+    bin?: string;
     projectPath?: string;
     judgeModel?: string;
     judgeBaseUrl?: string;
@@ -874,7 +874,7 @@ Examples:
       nRuns: parseInt(opts.runs, 10),
       condition: opts.condition,
       apiKey: opts.apiKey,
-      cofeGraphBin: opts.cofeGraphBin,
+      bin: opts.bin,
       projectPath: opts.projectPath,
       outDir: opts.out,
       seed: opts.seed !== undefined ? parseInt(opts.seed, 10) : undefined,
