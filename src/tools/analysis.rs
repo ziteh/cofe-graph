@@ -1,8 +1,9 @@
 use serde_json::{Value, json};
 
+use super::rel_file;
 use crate::graph::{CodebaseGraph, DeadCodeKind, FunctionNode};
 
-pub fn find_dead_code(graph: &CodebaseGraph) -> Result<Value, String> {
+pub fn find_dead_code(graph: &CodebaseGraph, root: &std::path::Path) -> Result<Value, String> {
     let mut dead = graph.find_dead_code();
     dead.sort_by_key(|(n, _)| &n.name);
 
@@ -10,7 +11,7 @@ pub fn find_dead_code(graph: &CodebaseGraph) -> Result<Value, String> {
         json!({
             "kind": k.as_str(),
             "name": n.name,
-            "file": n.file,
+            "file": rel_file(root, &n.file),
             "line": n.line,
         })
     };

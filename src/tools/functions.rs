@@ -102,6 +102,7 @@ pub fn find_functions_in_file(
 pub fn get_source(
     graph: &CodebaseGraph,
     store: &AnnotationStore,
+    root: &std::path::Path,
     params: GetSourceParams,
 ) -> Result<Value, String> {
     let GetSourceParams { name } = params;
@@ -113,7 +114,7 @@ pub fn get_source(
                 .and_then(|sha| store.get_symbol_annotation(sha, &n.name))
                 .map(|ann| format!("// annotation: {ann}\n"))
                 .unwrap_or_default();
-            let header = format!("// file: {}\n// line: {}", n.file.display(), n.line);
+            let header = format!("// file: {}\n// line: {}", rel_file(root, &n.file), n.line);
             let src_code = format!(
                 "{header}\n{annotation_line}\n{}",
                 n.source.replace("\r\n", "\n").replace("\t", "    ")

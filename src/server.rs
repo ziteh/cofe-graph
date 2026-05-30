@@ -143,6 +143,7 @@ impl GraphAnalyzer {
         self.call_result(crate::tools::functions::get_source(
             &*self.graph.read().await,
             &store,
+            &self.project_path,
             p,
         ))
     }
@@ -162,6 +163,7 @@ impl GraphAnalyzer {
     async fn find_dead_code(&self) -> CallToolResult {
         self.call_result(crate::tools::analysis::find_dead_code(
             &*self.graph.read().await,
+            &self.project_path,
         ))
     }
 

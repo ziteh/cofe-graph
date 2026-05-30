@@ -37,6 +37,15 @@ A code graph RAG MCP server for embedded C. Inspired by [CodeGraph](https://gith
 }
 ```
 
+### CLI
+
+| Flag                 | Description                                                      |
+| -------------------- | ---------------------------------------------------------------- |
+| `--toon`             | Responses with [TOON](https://toonformat.dev/) instead of JSON   |
+| `--quiet`            | Suppress log output to stderr                                    |
+| `--max-l1-cache <N>` | Maximum number of full-graph snapshots to keep in the L1 cache   |
+| `--max-l2-cache <N>` | Maximum number of per-file graph entries to keep in the L2 cache |
+
 ## Development
 
 Build:

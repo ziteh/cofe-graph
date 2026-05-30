@@ -13,7 +13,7 @@ async fn test_find_dead_code() {
     .await;
     let graph = graph_lock.read().await;
 
-    let v = find_dead_code(&graph).unwrap();
+    let v = find_dead_code(&graph, std::path::Path::new("")).unwrap();
     assert!(v.get("summary").is_some(), "Should contain summary");
 }
 

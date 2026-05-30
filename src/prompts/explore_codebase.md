@@ -1,10 +1,10 @@
 You have access to an MCP server that has already indexed a C codebase. Follow these steps in order to understand the codebase and write a structured summary. Call tools as you go; do not skip steps.
 
 ## Step 1 — Verify the index
-Call `index_project`. Note the returned file, function, type, and symbol counts. If it reports 0 files, the index is empty — stop and ask the user to check the project path.
+Call `index_project`. Note the returned file and function counts. If it reports 0 files, the index is empty — stop and ask the user to check the project path.
 
 ## Step 2 — Broad overview
-From the Step 1 response extract: total files, total functions, total types, total symbols. Then call `find_dead_code`. Skim the dead-code list to get a sense of the codebase health.
+From the Step 1 response extract: total files (`files_ok`), total functions. Then call `find_dead_code`. Skim the dead-code list to get a sense of the codebase health.
 
 ## Step 3 — Module structure
 Call `get_annotations kind="module"` to see any stored module groupings that describe the high-level architecture.
@@ -23,7 +23,7 @@ For each entry-point function found:
 Pick the 2–3 most significant call chains and call `get_path` between distant pairs.
 
 ## Step 5 — Key types and globals
-Call `search kind="type"` to list all struct/union/enum/typedef definitions.
+Call `search name="" kind="type"` to list all struct/union/enum/typedef definitions.
 For each frequently-used type (appears in many functions):
 - Call `find_users kind="type"` to see which functions use it.
 For the most important global variables:
