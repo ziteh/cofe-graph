@@ -4,23 +4,22 @@ A code graph RAG MCP server for embedded C. Inspired by [CodeGraph](https://gith
 
 ## MCP Tools
 
-| Tool                     | Description                                                          |
-| ------------------------ | -------------------------------------------------------------------- |
-| `index_project`          | Re-index the project directory                                       |
-| `search`                 | Find functions, types, and symbols by name                           |
-| `traverse`               | BFS callers or callees of one or more functions                      |
-| `get_source`             | Get the full source code of a function                               |
-| `get_path`               | Find the call path from one function to another                      |
-| `find_dead_code`         | List functions never called                                          |
-| `find_functions_in_file` | List all functions in files                                          |
-| `get_globals`            | List file-scope global variable declarations in files                |
-| `find_users`             | Find all functions referencing a global variable or type name        |
-| `includes`               | Query `#include` relationships                                       |
-| `annotate_file`          | Write a semantic annotation for a file (subsystem, summary, notes)   |
-| `annotate_symbol`        | Write a semantic annotation for a function, type, or global variable |
-| `get_annotations`        | Retrieve annotations for files matching a path substring             |
-| `list_unannotated`       | List unannotated files, or unannotated functions within a file       |
-| `get_file_context`       | Full analysis bundle for a single file                               |
+| Tool                     | Description                                                   |
+| ------------------------ | ------------------------------------------------------------- |
+| `index_project`          | Re-index the project directory                                |
+| `search`                 | Find functions, types, and symbols by name                    |
+| `traverse`               | BFS callers or callees of one or more functions               |
+| `get_source`             | Get the full source code of a function                        |
+| `get_path`               | Find the call path from one function to another               |
+| `find_dead_code`         | List functions never called                                   |
+| `find_functions_in_file` | List all functions in files                                   |
+| `get_globals`            | List file-scope global variable declarations in files         |
+| `find_users`             | Find all functions referencing a global variable or type name |
+| `includes`               | Query `#include` relationships                                |
+| `annotate`               | Write an annotation for a file or symbol                      |
+| `annotate_module`        | Define a logical module grouping across files                 |
+| `get_annotations`        | Read annotations for a module, file, or symbol                |
+| `list_unannotated`       | List files, functions, or globals that have no annotation yet |
 
 ## Usage
 

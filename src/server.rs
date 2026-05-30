@@ -122,12 +122,15 @@ From the Step 1 response extract: total files, total functions, total types, tot
 Then call `find_dead_code`. Skim the dead-code list to get a sense of the codebase health.
 
 ## Step 3 — Module structure
+Call `get_annotations kind="module"` to see any stored module groupings that describe the \
+high-level architecture.
 Identify the top 5–10 most important source files (by function count or by filename heuristics \
 such as `main`, `init`, `core`, `app`).
 For each important file:
 - Call `find_functions_in_file` with the filename substring.
-- Call `get_file_context` with the exact relative path.
+- Call `get_globals` with the filename substring.
 - Call `includes direction="outbound"` to see its dependencies.
+- Call `get_annotations kind="file" file=<path>` if a stored summary exists.
 
 ## Step 4 — Entry points and call flow
 Search for likely entry points: call `search` with queries like `main`, `init`, `start`, `run`, \
