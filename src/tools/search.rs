@@ -16,6 +16,31 @@ pub struct SearchParams {
     pub kind: Option<String>,
 }
 
+/// Sort items by name, then build their JSON representation and attach any stored annotation.
+fn format_results<'a, T>(
+    mut items: Vec<&'a T>,
+    file_of: impl Fn(&'a T) -> &'a std::path::Path,
+    name_of: impl Fn(&'a T) -> &'a str,
+    to_obj: impl Fn(&'a T) -> serde_json::Map<String, Value>,
+    store: &AnnotationStore,
+    file_shas: &std::collections::HashMap<std::path::PathBuf, String>,
+) -> Vec<Value> {
+    items.sort_by(|a, b| name_of(a).cmp(name_of(b)));
+    items
+        .into_iter()
+        .map(|item| {
+            let mut obj = to_obj(item);
+            if let Some(ann) = file_shas
+                .get(file_of(item))
+                .and_then(|sha| store.get_symbol_annotation(sha, name_of(item)))
+            {
+                obj.insert("annotation".into(), json!(ann));
+            }
+            Value::Object(obj)
+        })
+        .collect()
+}
+
 pub fn search(
     graph: &CodebaseGraph,
     store: &AnnotationStore,
@@ -41,12 +66,11 @@ pub fn search(
     let mut total = 0usize;
 
     if do_functions {
-        let mut fns: Vec<_> = graph.find_function(&name).into_iter().collect();
-        fns.sort_by(|a, b| a.name.cmp(&b.name));
-        let values: Vec<Value> = fns
-            .iter()
-            .map(|n| {
-                let sha = graph.file_shas.get(&n.file);
+        let values = format_results(
+            graph.find_function(&name),
+            |n| n.file.as_path(),
+            |n| n.name.as_str(),
+            |n| {
                 let mut obj = serde_json::Map::new();
                 obj.insert("name".into(), json!(n.name));
                 obj.insert("file".into(), json!(rel_file(root, &n.file)));
@@ -55,23 +79,21 @@ pub fn search(
                 if !n.conditions.is_empty() {
                     obj.insert("conditions".into(), json!(n.conditions));
                 }
-                if let Some(ann) = sha.and_then(|s| store.get_symbol_annotation(s, &n.name)) {
-                    obj.insert("annotation".into(), json!(ann));
-                }
-                Value::Object(obj)
-            })
-            .collect();
+                obj
+            },
+            store,
+            &graph.file_shas,
+        );
         total += values.len();
         result.insert("functions".into(), json!(values));
     }
 
     if do_types {
-        let mut types: Vec<_> = graph.find_type(&name).into_iter().collect();
-        types.sort_by(|a, b| a.name.cmp(&b.name));
-        let values: Vec<Value> = types
-            .iter()
-            .map(|t| {
-                let sha = graph.file_shas.get(&t.file);
+        let values = format_results(
+            graph.find_type(&name),
+            |t| t.file.as_path(),
+            |t| t.name.as_str(),
+            |t| {
                 let mut obj = serde_json::Map::new();
                 obj.insert("name".into(), json!(t.name));
                 obj.insert("kind".into(), json!(t.kind.as_str()));
@@ -81,23 +103,21 @@ pub fn search(
                 if !t.conditions.is_empty() {
                     obj.insert("conditions".into(), json!(t.conditions));
                 }
-                if let Some(ann) = sha.and_then(|s| store.get_symbol_annotation(s, &t.name)) {
-                    obj.insert("annotation".into(), json!(ann));
-                }
-                Value::Object(obj)
-            })
-            .collect();
+                obj
+            },
+            store,
+            &graph.file_shas,
+        );
         total += values.len();
         result.insert("types".into(), json!(values));
     }
 
     if do_symbols {
-        let mut syms: Vec<_> = graph.find_symbol(&name).into_iter().collect();
-        syms.sort_by(|a, b| a.name.cmp(&b.name));
-        let values: Vec<Value> = syms
-            .iter()
-            .map(|s| {
-                let sha = graph.file_shas.get(&s.file);
+        let values = format_results(
+            graph.find_symbol(&name),
+            |s| s.file.as_path(),
+            |s| s.name.as_str(),
+            |s| {
                 let mut obj = serde_json::Map::new();
                 obj.insert("name".into(), json!(s.name));
                 obj.insert("kind".into(), json!(s.kind.as_str()));
@@ -107,12 +127,11 @@ pub fn search(
                 if !s.conditions.is_empty() {
                     obj.insert("conditions".into(), json!(s.conditions));
                 }
-                if let Some(ann) = sha.and_then(|sha| store.get_symbol_annotation(sha, &s.name)) {
-                    obj.insert("annotation".into(), json!(ann));
-                }
-                Value::Object(obj)
-            })
-            .collect();
+                obj
+            },
+            store,
+            &graph.file_shas,
+        );
         total += values.len();
         result.insert("symbols".into(), json!(values));
     }

@@ -32,38 +32,41 @@ pub struct GetPathParams {
     pub to: String,
 }
 
-pub fn get_callers(graph: &CodebaseGraph, params: CallersParams) -> Result<Value, String> {
-    let CallersParams { names, depth } = params;
-    let d = depth.unwrap_or(1) as usize;
+fn collect_relationships(
+    graph: &CodebaseGraph,
+    names: &[String],
+    depth: usize,
+    callers: bool,
+) -> Result<Value, String> {
+    let direction = if callers { "callers" } else { "callees" };
     let mut result = serde_json::Map::new();
-    for name in &names {
-        let mut callers = graph.get_callers(name, d);
-        callers.sort();
-        if !callers.is_empty() {
-            result.insert(name.clone(), json!(callers));
+    for name in names {
+        let mut rels = if callers {
+            graph.get_callers(name, depth)
+        } else {
+            graph.get_callees(name, depth)
+        };
+        rels.sort();
+        if !rels.is_empty() {
+            result.insert(name.clone(), json!(rels));
         }
     }
     if result.is_empty() {
-        return Err("No callers found for any of the given functions".to_string());
+        return Err(format!(
+            "No {direction} found for any of the given functions"
+        ));
     }
     Ok(Value::Object(result))
 }
 
+pub fn get_callers(graph: &CodebaseGraph, params: CallersParams) -> Result<Value, String> {
+    let CallersParams { names, depth } = params;
+    collect_relationships(graph, &names, depth.unwrap_or(1) as usize, true)
+}
+
 pub fn get_callees(graph: &CodebaseGraph, params: CalleesParams) -> Result<Value, String> {
     let CalleesParams { names, depth } = params;
-    let d = depth.unwrap_or(1) as usize;
-    let mut result = serde_json::Map::new();
-    for name in &names {
-        let mut callees = graph.get_callees(name, d);
-        callees.sort();
-        if !callees.is_empty() {
-            result.insert(name.clone(), json!(callees));
-        }
-    }
-    if result.is_empty() {
-        return Err("No callees found for any of the given functions".to_string());
-    }
-    Ok(Value::Object(result))
+    collect_relationships(graph, &names, depth.unwrap_or(1) as usize, false)
 }
 
 pub fn get_path(graph: &CodebaseGraph, params: GetPathParams) -> Result<Value, String> {

@@ -196,6 +196,46 @@ pub fn list_unannotated(
     let filter = params.filename_filter.as_deref().map(str::to_lowercase);
     let filter = filter.as_deref();
 
+    fn collect_unannotated_symbols<'a, T: 'a>(
+        items: impl Iterator<Item = &'a T>,
+        file_of: impl Fn(&'a T) -> &'a std::path::Path,
+        name_of: impl Fn(&'a T) -> &'a str,
+        graph: &CodebaseGraph,
+        store: &AnnotationStore,
+        base: &Path,
+        filter: Option<&str>,
+    ) -> Vec<Value> {
+        let mut missing: Vec<Value> = items
+            .filter_map(|item| {
+                let rel = super::rel_file(base, file_of(item));
+                if filter.is_some_and(|f| !rel.to_lowercase().contains(f)) {
+                    return None;
+                }
+                let annotated = graph
+                    .file_shas
+                    .get(file_of(item))
+                    .and_then(|sha| store.get_symbol_annotation(sha, name_of(item)))
+                    .is_some();
+                if !annotated {
+                    Some(json!({ "name": name_of(item), "file": rel }))
+                } else {
+                    None
+                }
+            })
+            .collect();
+        missing.sort_by(|a, b| {
+            let fa = a["file"].as_str().unwrap_or("");
+            let fb = b["file"].as_str().unwrap_or("");
+            fa.cmp(fb).then(
+                a["name"]
+                    .as_str()
+                    .unwrap_or("")
+                    .cmp(b["name"].as_str().unwrap_or("")),
+            )
+        });
+        missing
+    }
+
     match params.kind.as_str() {
         "file" => {
             let mut missing: Vec<String> = graph
@@ -217,69 +257,27 @@ pub fn list_unannotated(
             Ok(json!({ "kind": "file", "count": missing.len(), "items": missing }))
         }
         "function" => {
-            let mut missing: Vec<Value> = graph
-                .nodes
-                .values()
-                .filter_map(|n| {
-                    let rel = super::rel_file(base, &n.file);
-                    if filter.is_some_and(|f| !rel.to_lowercase().contains(f)) {
-                        return None;
-                    }
-                    let has = graph
-                        .file_shas
-                        .get(&n.file)
-                        .and_then(|sha| store.get_symbol_annotation(sha, &n.name))
-                        .is_some();
-                    if !has {
-                        Some(json!({ "name": n.name, "file": rel }))
-                    } else {
-                        None
-                    }
-                })
-                .collect();
-            missing.sort_by(|a, b| {
-                let fa = a["file"].as_str().unwrap_or("");
-                let fb = b["file"].as_str().unwrap_or("");
-                fa.cmp(fb).then(
-                    a["name"]
-                        .as_str()
-                        .unwrap_or("")
-                        .cmp(b["name"].as_str().unwrap_or("")),
-                )
-            });
+            let missing = collect_unannotated_symbols(
+                graph.nodes.values(),
+                |n| n.file.as_path(),
+                |n| n.name.as_str(),
+                graph,
+                store,
+                base,
+                filter,
+            );
             Ok(json!({ "kind": "function", "count": missing.len(), "items": missing }))
         }
         "global" => {
-            let mut missing: Vec<Value> = graph
-                .globals
-                .values()
-                .filter_map(|v| {
-                    let rel = super::rel_file(base, &v.file);
-                    if filter.is_some_and(|f| !rel.to_lowercase().contains(f)) {
-                        return None;
-                    }
-                    let has = graph
-                        .file_shas
-                        .get(&v.file)
-                        .and_then(|sha| store.get_symbol_annotation(sha, &v.name))
-                        .is_some();
-                    if !has {
-                        Some(json!({ "name": v.name, "file": rel }))
-                    } else {
-                        None
-                    }
-                })
-                .collect();
-            missing.sort_by(|a, b| {
-                let fa = a["file"].as_str().unwrap_or("");
-                let fb = b["file"].as_str().unwrap_or("");
-                fa.cmp(fb).then(
-                    a["name"]
-                        .as_str()
-                        .unwrap_or("")
-                        .cmp(b["name"].as_str().unwrap_or("")),
-                )
-            });
+            let missing = collect_unannotated_symbols(
+                graph.globals.values(),
+                |v| v.file.as_path(),
+                |v| v.name.as_str(),
+                graph,
+                store,
+                base,
+                filter,
+            );
             Ok(json!({ "kind": "global", "count": missing.len(), "items": missing }))
         }
         other => Err(format!(
