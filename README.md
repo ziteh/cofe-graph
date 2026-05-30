@@ -66,26 +66,26 @@ Measures response quality with vs. without cofe-graph.
 
 Prerequisites:
 
-- Node.js and pnpm
+- Python 3.11+ and [uv](https://docs.astral.sh/uv/)
 - cofe-graph binary
 
 ### Setup
 
 ```bash
-cd benchmark && pnpm install
+cd benchmark && uv sync
 ```
 
 ### Run
 
 ```bash
 # Full pipeline — run bench N times, auto-judge, summarise
-pnpm judge --run \
+uv run judge.py --run \
   --model gemma4:e4b --base-url http://localhost:11434/v1 \
   --judge-model gemma4:26b --judge-base-url http://localhost:11434/v1 \
   --question Q1 Q2 --runs 2
 
 # Bench only (no judging)
-pnpm bench --model <model> --base-url <url>
+uv run bench.py --model <model> --base-url <url>
 ```
 
 For OpenRouter, set `OPENROUTER_API_KEY` in `benchmark/.env` (copy from `benchmark/.env.example`).
