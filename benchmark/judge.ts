@@ -492,59 +492,166 @@ function renderPlot(title: string, spec: Plot.PlotOptions): string {
 }
 
 function generateCharts(judgeDir: string, chartRows: ChartRow[], condStats: CondStats[]): void {
-  // Chart 1: per-task score % faceted by task, condition on x-axis (no HTML legend needed)
-  const scoresSvg = renderPlot("Score % by task and condition", {
-    width: 800,
-    height: 360,
+  // Pre-aggregate per task+condition so text labels match the bar heights exactly.
+  const aggMap = new Map<string, { sum: number; count: number }>();
+  for (const r of chartRows) {
+    const key = `${r.task}|${r.condition}`;
+    const cur = aggMap.get(key) ?? { sum: 0, count: 0 };
+    cur.sum += r.pct;
+    cur.count++;
+    aggMap.set(key, cur);
+  }
+  const aggScores = [...aggMap.entries()].map(([key, v]) => {
+    const [task, condition] = key.split("|");
+    return { task, condition, pct: v.sum / v.count };
+  });
+
+  // Chart 1: per-task accuracy — one facet per task, with/without side by side.
+  const accuracySvg = renderPlot("Accuracy by task (% of rubric score)", {
+    width: 1100,
+    height: 400,
+    marginTop: 30,
     fx: { label: "Task" },
-    x: { label: "Condition" },
+    x: { label: null },
     y: { label: "Score (%)", domain: [0, 100], grid: true },
-    color: { legend: false },
+    color: { domain: ["with", "without"], range: ["#4e79a7", "#f28e2b"] },
     marks: [
-      Plot.barY(chartRows, Plot.groupX({ y: "mean" }, {
+      Plot.barY(aggScores, {
         fx: "task",
         x: "condition",
         y: "pct",
         fill: "condition",
         tip: true,
-      })),
+      }),
+      Plot.text(aggScores, {
+        fx: "task",
+        x: "condition",
+        y: "pct",
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        text: (d: any) => `${Math.round(d.pct)}%`,
+        dy: -4,
+        fontSize: 10,
+        lineAnchor: "bottom",
+      }),
       Plot.ruleY([0]),
+      // 50 % line as a visual "midpoint" reference.
+      Plot.ruleY([50], { stroke: "#bbb", strokeDasharray: "4,3" }),
     ],
   });
 
-  // Chart 2: condition stats faceted by metric, condition on x-axis
-  const statRows: { condition: string; metric: string; value: number }[] = [];
+  // Chart 2: Token usage (input and output combined) — separate scale for better readability.
+  const tokenRows: { condition: string; metric: string; value: number }[] = [];
   for (const s of condStats) {
-    statRows.push(
-      { condition: s.condition, metric: "score %", value: s.score_pct },
-      { condition: s.condition, metric: "tools", value: s.tools },
-      { condition: s.condition, metric: "time (s)", value: s.secs },
+    tokenRows.push(
+      { condition: s.condition, metric: "input tokens",  value: s.in_tok },
+      { condition: s.condition, metric: "output tokens", value: s.out_tok },
     );
   }
 
-  const statsSvg = renderPlot("Condition stats comparison", {
-    width: 800,
-    height: 360,
-    fx: { label: "Metric" },
-    x: { label: "Condition" },
-    y: { label: "Value", grid: true },
-    color: { legend: false },
+  const tokensSvg = renderPlot("Token usage (totals across all tasks)", {
+    width: 600,
+    height: 380,
+    marginTop: 30,
+    fx: { label: null },
+    x: { label: null },
+    y: { label: "Tokens", grid: true },
+    color: { domain: ["with", "without"], range: ["#4e79a7", "#f28e2b"] },
     marks: [
-      Plot.barY(statRows, {
+      Plot.barY(tokenRows, {
         fx: "metric",
         x: "condition",
         y: "value",
         fill: "condition",
         tip: true,
       }),
+      Plot.text(tokenRows, {
+        fx: "metric",
+        x: "condition",
+        y: "value",
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        text: (d: any) => (d.value as number).toLocaleString(),
+        dy: -4,
+        fontSize: 10,
+        lineAnchor: "bottom",
+      }),
       Plot.ruleY([0]),
     ],
   });
 
-  writeFileSync(join(judgeDir, "chart_scores.svg"), scoresSvg);
-  writeFileSync(join(judgeDir, "chart_stats.svg"), statsSvg);
-  console.log(`[judge] Written: ${join(judgeDir, "chart_scores.svg")}`);
-  console.log(`[judge] Written: ${join(judgeDir, "chart_stats.svg")}`);
+  // Chart 3: Tool calls — separate scale for better readability.
+  const toolCallsRows: { condition: string; value: number }[] = condStats.map((s) => ({
+    condition: s.condition,
+    value: s.tools,
+  }));
+
+  const toolCallsSvg = renderPlot("Tool calls (totals across all tasks)", {
+    width: 500,
+    height: 350,
+    marginTop: 30,
+    x: { label: null },
+    y: { label: "Number of Tool Calls", grid: true },
+    color: { domain: ["with", "without"], range: ["#4e79a7", "#f28e2b"] },
+    marks: [
+      Plot.barY(toolCallsRows, {
+        x: "condition",
+        y: "value",
+        fill: "condition",
+        tip: true,
+      }),
+      Plot.text(toolCallsRows, {
+        x: "condition",
+        y: "value",
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        text: (d: any) => String(Math.round(d.value as number)),
+        dy: -4,
+        fontSize: 10,
+        lineAnchor: "bottom",
+      }),
+      Plot.ruleY([0]),
+    ],
+  });
+
+  // Chart 4: Duration — separate scale for better readability.
+  const durationRows: { condition: string; value: number }[] = condStats.map((s) => ({
+    condition: s.condition,
+    value: s.secs,
+  }));
+
+  const durationSvg = renderPlot("Execution duration (totals across all tasks)", {
+    width: 500,
+    height: 350,
+    marginTop: 30,
+    x: { label: null },
+    y: { label: "Time (seconds)", grid: true },
+    color: { domain: ["with", "without"], range: ["#4e79a7", "#f28e2b"] },
+    marks: [
+      Plot.barY(durationRows, {
+        x: "condition",
+        y: "value",
+        fill: "condition",
+        tip: true,
+      }),
+      Plot.text(durationRows, {
+        x: "condition",
+        y: "value",
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        text: (d: any) => `${(d.value as number).toFixed(1)}s`,
+        dy: -4,
+        fontSize: 10,
+        lineAnchor: "bottom",
+      }),
+      Plot.ruleY([0]),
+    ],
+  });
+
+  writeFileSync(join(judgeDir, "chart_accuracy.svg"), accuracySvg);
+  writeFileSync(join(judgeDir, "chart_tokens.svg"), tokensSvg);
+  writeFileSync(join(judgeDir, "chart_tool_calls.svg"), toolCallsSvg);
+  writeFileSync(join(judgeDir, "chart_duration.svg"), durationSvg);
+  console.log(`[judge] Written: ${join(judgeDir, "chart_accuracy.svg")}`);
+  console.log(`[judge] Written: ${join(judgeDir, "chart_tokens.svg")}`);
+  console.log(`[judge] Written: ${join(judgeDir, "chart_tool_calls.svg")}`);
+  console.log(`[judge] Written: ${join(judgeDir, "chart_duration.svg")}`);
 }
 
 function cmdSummary(judgeDir: string): void {
