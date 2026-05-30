@@ -15,7 +15,11 @@ use rmcp::service::{RequestContext, RoleServer};
 use rmcp::{ServerHandler, prompt, prompt_handler, prompt_router, tool, tool_handler, tool_router};
 use tokio::sync::RwLock;
 
+use crate::annotations::AnnotationStore;
 use crate::graph::CodebaseGraph;
+use crate::tools::annotations::{
+    AnnotateModuleParams, AnnotateParams, GetAnnotationsParams, ListUnannotatedParams,
+};
 use crate::tools::functions::{FindInFileParams, GetSourceParams};
 use crate::tools::globals::FindUsersParams;
 use crate::tools::includes::IncludesParams;
@@ -31,6 +35,7 @@ pub struct ExploreArgs {
 #[derive(Clone)]
 pub struct GraphAnalyzer {
     pub(crate) graph: Arc<RwLock<CodebaseGraph>>,
+    pub(crate) annotation_store: Arc<RwLock<AnnotationStore>>,
     pub(crate) project_path: PathBuf,
     use_toon: bool,
     max_l1_entries: usize,
@@ -47,6 +52,7 @@ impl GraphAnalyzer {
         max_l2_entries: usize,
     ) -> Self {
         let graph = Arc::new(RwLock::new(CodebaseGraph::default()));
+        let annotation_store = Arc::new(RwLock::new(AnnotationStore::load(&path)));
         let g = Arc::clone(&graph);
         let p = path.clone();
         tokio::spawn(async move {
@@ -54,6 +60,7 @@ impl GraphAnalyzer {
         });
         Self {
             graph,
+            annotation_store,
             project_path: path,
             use_toon,
             max_l1_entries,
@@ -194,8 +201,10 @@ impl GraphAnalyzer {
     )]
     async fn search(&self, params: Parameters<SearchParams>) -> CallToolResult {
         let Parameters(p) = params;
+        let store = self.annotation_store.read().await;
         self.call_result(crate::tools::search::search(
             &*self.graph.read().await,
+            &store,
             &self.project_path,
             p,
         ))
@@ -215,8 +224,10 @@ impl GraphAnalyzer {
     #[tool(description = "Get the source code of a function by exact name")]
     async fn get_source(&self, params: Parameters<GetSourceParams>) -> CallToolResult {
         let Parameters(p) = params;
+        let store = self.annotation_store.read().await;
         self.call_result(crate::tools::functions::get_source(
             &*self.graph.read().await,
+            &store,
             p,
         ))
     }
@@ -244,8 +255,10 @@ impl GraphAnalyzer {
     )]
     async fn find_functions_in_file(&self, params: Parameters<FindInFileParams>) -> CallToolResult {
         let Parameters(p) = params;
+        let store = self.annotation_store.read().await;
         self.call_result(crate::tools::functions::find_functions_in_file(
             &*self.graph.read().await,
+            &store,
             &self.project_path,
             p,
         ))
@@ -256,7 +269,63 @@ impl GraphAnalyzer {
     )]
     async fn get_globals(&self, params: Parameters<FindInFileParams>) -> CallToolResult {
         let Parameters(p) = params;
+        let store = self.annotation_store.read().await;
         self.call_result(crate::tools::globals::get_globals(
+            &*self.graph.read().await,
+            &store,
+            &self.project_path,
+            p,
+        ))
+    }
+
+    #[tool(
+        description = "Create or update a module annotation. A module is a logical grouping of files with a human-readable summary. Module annotations are not commit-aware and persist across commits."
+    )]
+    async fn annotate_module(&self, params: Parameters<AnnotateModuleParams>) -> CallToolResult {
+        let Parameters(p) = params;
+        let mut store = self.annotation_store.write().await;
+        self.call_result(crate::tools::annotations::annotate_module(
+            &mut store,
+            &self.project_path,
+            p,
+        ))
+    }
+
+    #[tool(
+        description = "Add or update a summary for a file or a specific symbol within a file. Omit `symbol` to annotate the file itself; include `symbol` to annotate a function, global variable, or #define. Annotations are keyed by git blob SHA and automatically disappear when the file changes on a different commit."
+    )]
+    async fn annotate(&self, params: Parameters<AnnotateParams>) -> CallToolResult {
+        let Parameters(p) = params;
+        let mut store = self.annotation_store.write().await;
+        self.call_result(crate::tools::annotations::annotate(
+            &mut store,
+            &self.project_path,
+            p,
+        ))
+    }
+
+    #[tool(
+        description = "Read annotations. kind=\"module\": list all module annotations. kind=\"file\": get annotation for a single file (requires `file`). kind=\"symbol\": get annotation for a symbol in a file (requires `file` and `symbol`). Returns null annotation when none exists or when the file has changed since the annotation was written."
+    )]
+    async fn get_annotations(&self, params: Parameters<GetAnnotationsParams>) -> CallToolResult {
+        let Parameters(p) = params;
+        let store = self.annotation_store.read().await;
+        self.call_result(crate::tools::annotations::get_annotations(
+            &store,
+            &*self.graph.read().await,
+            &self.project_path,
+            p,
+        ))
+    }
+
+    #[tool(
+        description = "List items that have no annotation in the current index snapshot. kind=\"file\": unannotated source files. kind=\"function\": unannotated functions. kind=\"global\": unannotated global variables. Optional `filename_filter` narrows results to files whose path contains the substring (case-insensitive)."
+    )]
+    async fn list_unannotated(&self, params: Parameters<ListUnannotatedParams>) -> CallToolResult {
+        let Parameters(p) = params;
+        let store = self.annotation_store.read().await;
+        self.call_result(crate::tools::annotations::list_unannotated(
+            &store,
             &*self.graph.read().await,
             &self.project_path,
             p,

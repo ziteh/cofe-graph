@@ -1,3 +1,4 @@
+use cofe_graph::annotations::AnnotationStore;
 use cofe_graph::tools::search::{SearchParams, search};
 
 #[tokio::test]
@@ -11,6 +12,7 @@ async fn test_search_no_kind_finds_function() {
 
     let v = search(
         &graph,
+        &AnnotationStore::default(),
         std::path::Path::new(""),
         SearchParams {
             name: "render".to_string(),
@@ -36,6 +38,7 @@ async fn test_search_kind_function_excludes_types() {
 
     let v = search(
         &graph,
+        &AnnotationStore::default(),
         std::path::Path::new(""),
         SearchParams {
             name: "vec".to_string(),
@@ -64,6 +67,7 @@ async fn test_search_kind_type() {
 
     let v = search(
         &graph,
+        &AnnotationStore::default(),
         std::path::Path::new(""),
         SearchParams {
             name: "Point".to_string(),
@@ -88,6 +92,7 @@ async fn test_search_unknown_kind_returns_error() {
 
     let result = search(
         &graph,
+        &AnnotationStore::default(),
         std::path::Path::new(""),
         SearchParams {
             name: "foo".to_string(),
@@ -104,6 +109,7 @@ async fn test_search_no_match_returns_error() {
 
     let result = search(
         &graph,
+        &AnnotationStore::default(),
         std::path::Path::new(""),
         SearchParams {
             name: "zzz_nonexistent".to_string(),

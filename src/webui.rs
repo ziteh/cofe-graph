@@ -52,6 +52,8 @@ async fn source_handler(
     Query(params): Query<SourceQuery>,
 ) -> Json<serde_json::Value> {
     let graph = server.graph.read().await;
-    let result = crate::tools::functions::get_source(&graph, GetSourceParams { name: params.name });
+    let store = server.annotation_store.read().await;
+    let result =
+        crate::tools::functions::get_source(&graph, &store, GetSourceParams { name: params.name });
     Json(result.unwrap_or_else(|e| serde_json::json!({ "error": e })))
 }

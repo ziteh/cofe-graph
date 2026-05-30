@@ -24,6 +24,10 @@ pub struct CodebaseGraph {
     pub types: HashMap<String, Vec<TypeNode>>,
     /// File-scope variable declarations, keyed by name
     pub globals: HashMap<String, GlobalVar>,
+    /// Snapshot of git blob SHAs at index time: absolute file path → blob SHA.
+    /// Used by the annotation system to verify that a stored annotation still matches the current file content.
+    #[serde(default)]
+    pub file_shas: HashMap<PathBuf, String>,
 }
 
 impl CodebaseGraph {
@@ -51,6 +55,7 @@ impl CodebaseGraph {
         self.includes.clear();
         self.types.clear();
         self.globals.clear();
+        self.file_shas.clear();
     }
 
     pub fn merge(&mut self, other: CodebaseGraph) {

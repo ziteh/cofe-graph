@@ -215,7 +215,10 @@ pub async fn index_project(
     }
 
     // Merge all FileGraphs → CodebaseGraph
-    let merged = crate::graph::merge_file_graphs(file_graphs);
+    let mut merged = crate::graph::merge_file_graphs(file_graphs);
+    if let Some(ref bm) = blob_map {
+        merged.file_shas = bm.clone();
+    }
     let fn_count = merged.nodes.len();
     let edge_count: usize = merged.callees.values().map(|s| s.len()).sum();
 

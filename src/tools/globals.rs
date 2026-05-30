@@ -5,10 +5,12 @@ use serde_json::{Value, json};
 use super::functions::{FindInFileParams, GetSourceParams};
 use super::rel_file;
 use super::types::GetTypeUsersParams;
+use crate::annotations::AnnotationStore;
 use crate::graph::CodebaseGraph;
 
 pub fn get_globals(
     graph: &CodebaseGraph,
+    store: &AnnotationStore,
     root: &std::path::Path,
     params: FindInFileParams,
 ) -> Result<Value, String> {
@@ -22,6 +24,7 @@ pub fn get_globals(
     let matches: Vec<Value> = results
         .iter()
         .map(|v| {
+            let sha = graph.file_shas.get(&v.file);
             let mut obj = serde_json::Map::new();
             obj.insert("name".into(), json!(v.name));
             obj.insert("file".into(), json!(rel_file(root, &v.file)));
@@ -30,6 +33,9 @@ pub fn get_globals(
             obj.insert("static".into(), json!(v.is_static));
             if !v.conditions.is_empty() {
                 obj.insert("conditions".into(), json!(v.conditions));
+            }
+            if let Some(ann) = sha.and_then(|s| store.get_symbol_annotation(s, &v.name)) {
+                obj.insert("annotation".into(), json!(ann));
             }
             Value::Object(obj)
         })
