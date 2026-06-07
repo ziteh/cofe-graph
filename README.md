@@ -4,22 +4,22 @@ A code graph RAG MCP server for embedded C. Inspired by [CodeGraph](https://gith
 
 ## MCP Tools
 
-| Tool                     | Description                                                   |
-| ------------------------ | ------------------------------------------------------------- |
-| `index_project`          | Re-index the project directory                                |
-| `search`                 | Find functions, types, and symbols by name                    |
-| `traverse`               | BFS callers or callees of one or more functions               |
-| `get_source`             | Get the full source code of a function                        |
-| `get_path`               | Find the call path from one function to another               |
-| `find_dead_code`         | List functions never called                                   |
-| `find_functions_in_file` | List all functions in files                                   |
-| `get_globals`            | List file-scope global variable declarations in files         |
-| `find_users`             | Find all functions referencing a global variable or type name |
-| `includes`               | Query `#include` relationships                                |
-| `annotate`               | Write an annotation for a file or symbol                      |
-| `annotate_module`        | Define a logical module grouping across files                 |
-| `get_annotations`        | Read annotations for a module, file, or symbol                |
-| `list_unannotated`       | List files, functions, or globals that have no annotation yet |
+| Tool                     | Description                                                                      |
+| ------------------------ | -------------------------------------------------------------------------------- |
+| `index_project`          | Force re-index and return indexing statistics (auto-triggered on source changes) |
+| `search`                 | Find functions, types, and symbols by name                                       |
+| `traverse`               | BFS callers or callees of one or more functions                                  |
+| `get_source`             | Get the full source code of a function                                           |
+| `get_path`               | Find the call path from one function to another                                  |
+| `find_dead_code`         | List functions never called                                                      |
+| `find_functions_in_file` | List all functions in files                                                      |
+| `get_globals`            | List file-scope global variable declarations in files                            |
+| `find_users`             | Find all functions referencing a global variable or type name                    |
+| `includes`               | Query `#include` relationships                                                   |
+| `annotate`               | Write an annotation for a file or symbol                                         |
+| `annotate_module`        | Define a logical module grouping across files                                    |
+| `get_annotations`        | Read annotations for a module, file, or symbol                                   |
+| `list_unannotated`       | List files, functions, or globals that have no annotation yet                    |
 
 ## Usage
 
@@ -39,12 +39,11 @@ A code graph RAG MCP server for embedded C. Inspired by [CodeGraph](https://gith
 
 ### CLI
 
-| Flag                 | Description                                                      |
-| -------------------- | ---------------------------------------------------------------- |
-| `--toon`             | Responses with [TOON](https://toonformat.dev/) instead of JSON   |
-| `--quiet`            | Suppress log output to stderr                                    |
-| `--max-l1-cache <N>` | Maximum number of full-graph snapshots to keep in the L1 cache   |
-| `--max-l2-cache <N>` | Maximum number of per-file graph entries to keep in the L2 cache |
+| Flag                   | Description                                                                                      |
+| ---------------------- | ------------------------------------------------------------------------------------------------ |
+| `--toon`               | Responses with [TOON](https://toonformat.dev/) instead of JSON                                   |
+| `--quiet`              | Suppress log output to stderr                                                                    |
+| `--cache-overhead <N>` | Extra cache slots as a percentage of the file count. E.g. `100` keeps two full branch snapshots. |
 
 ## Development
 

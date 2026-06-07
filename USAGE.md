@@ -8,4 +8,4 @@ Detailed usage guidance is available as MCP resources at:
 - `graph://rules-of-thumb`: best practices for tool usage
 - `graph://workflows`: step-by-step guides for common tasks
 
-The project is indexed automatically at startup. Use the `index_project` tool to re-index after source changes.
+The project is indexed automatically at startup and re-indexed whenever source files change. Use `index_project` to force a re-index or to view indexing statistics.

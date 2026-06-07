@@ -8,4 +8,3 @@
 - **`annotate` covers both files and symbols.** Omit `symbol` to annotate the file itself; include `symbol` to annotate a specific function, global, or macro. Both are keyed by git blob SHA and automatically disappear when the file is modified on a different commit.
 - **`get_annotations kind="module"`** lists all logical groupings at once — use this for an overview before diving into individual files.
 - **`find_dead_code` classes other than `suspicious`** are not actually dead — do not delete them based on this tool alone.
-- **After any source change**, call `index_project` once before further tool calls.

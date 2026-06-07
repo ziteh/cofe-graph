@@ -4,16 +4,14 @@ use cofe_graph::server::GraphAnalyzer;
 use rmcp::ServiceExt;
 use std::path::PathBuf;
 
-const DEFAULT_MAX_L1_CACHE: usize = 5;
-const DEFAULT_MAX_L2_CACHE: usize = 5000;
+const DEFAULT_CACHE_OVERHEAD_PCT: usize = 25;
 const DEFAULT_WEBUI_PORT: u16 = 5113;
 
 struct Args {
     path: PathBuf,
     use_toon: bool,
     quiet: bool,
-    max_l1_cache: usize,
-    max_l2_cache: usize,
+    cache_overhead_pct: usize,
 }
 
 fn parse_args() -> Result<Args> {
@@ -33,30 +31,21 @@ fn parse_args() -> Result<Args> {
 
     let quiet = args.contains(&"--quiet".to_string());
 
-    let max_l1_cache = args
+    let cache_overhead_pct = args
         .windows(2)
-        .find(|w| w[0] == "--max-l1-cache")
+        .find(|w| w[0] == "--cache-overhead")
         .map(|w| {
             w[1].parse::<usize>()
-                .expect("--max-l1-cache must be a positive integer")
+                .expect("--cache-overhead must be a non-negative integer")
         })
-        .unwrap_or(DEFAULT_MAX_L1_CACHE);
-
-    let max_l2_cache = args
-        .windows(2)
-        .find(|w| w[0] == "--max-l2-cache")
-        .map(|w| {
-            w[1].parse::<usize>()
-                .expect("--max-l2-cache must be a positive integer")
-        })
-        .unwrap_or(DEFAULT_MAX_L2_CACHE);
+        .unwrap_or(DEFAULT_CACHE_OVERHEAD_PCT);
 
     let path = PathBuf::from(
         args.iter()
             .find(|a| !a.starts_with("--"))
             .unwrap_or_else(|| {
                 panic!(
-                    "usage: {} <project-path> [--toon] [--quiet] [--max-l1-cache <N>] [--max-l2-cache <N>]",
+                    "usage: {} <project-path> [--toon] [--quiet] [--cache-overhead <PCT>]",
                     program_name
                 )
             }),
@@ -71,8 +60,7 @@ fn parse_args() -> Result<Args> {
         path,
         use_toon,
         quiet,
-        max_l1_cache,
-        max_l2_cache,
+        cache_overhead_pct,
     })
 }
 
@@ -87,16 +75,10 @@ async fn main() -> Result<()> {
     tracing::info!(
         project = %args.path.display(),
         format = if args.use_toon { "toon" } else { "json" },
-        max_l1_cache = args.max_l1_cache,
-        max_l2_cache = args.max_l2_cache,
+        cache_overhead_pct = args.cache_overhead_pct,
         "starting MCP server on stdio, and the web UI on http://localhost:{DEFAULT_WEBUI_PORT}",
     );
-    let server = GraphAnalyzer::new(
-        args.path,
-        args.use_toon,
-        args.max_l1_cache,
-        args.max_l2_cache,
-    );
+    let server = GraphAnalyzer::new(args.path, args.use_toon, args.cache_overhead_pct);
     tokio::spawn(cofe_graph::webui::start(server.clone(), DEFAULT_WEBUI_PORT));
     let service = server.serve(rmcp::transport::stdio()).await?;
     service.waiting().await?;

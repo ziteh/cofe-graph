@@ -5,7 +5,6 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use crate::annotations::{AnnotationStore, ModuleAnnotation};
-use crate::cache::Cache;
 use crate::graph::CodebaseGraph;
 
 // ---------------------------------------------------------------------------
@@ -290,17 +289,9 @@ pub fn list_unannotated(
 // Helper
 // ---------------------------------------------------------------------------
 
-/// Resolve the git blob SHA (or blake3 content hash when git is unavailable)
-/// for a project-relative file path.
+/// Compute the blake3 content hash for a project-relative file path.
 fn resolve_sha(base: &Path, rel: &str) -> Result<String, String> {
     let abs = base.join(rel);
-    // Try git blob map first; fall through to blake3 if not tracked.
-    if let Some(blob_map) = Cache::ls_files(base)
-        && let Some(sha) = blob_map.get(&abs)
-    {
-        return Ok(sha.clone());
-    }
-    // No git, or untracked file: hash the content.
     let bytes = std::fs::read(&abs).map_err(|e| format!("cannot read '{rel}': {e}"))?;
     Ok(blake3::hash(&bytes).to_hex().to_string())
 }

@@ -1,5 +1,4 @@
 use rayon::prelude::*;
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -103,31 +102,11 @@ pub async fn index_sources(
 pub async fn index_project(
     graph: Arc<RwLock<CodebaseGraph>>,
     path: &Path,
-    max_l1_entries: usize,
-    max_l2_entries: usize,
+    cache_overhead_pct: usize,
 ) -> Result<Value, String> {
-    let cache = Cache::open(path, max_l1_entries, max_l2_entries);
-
-    // L1: full-graph hit
-    if let Some(ref c) = cache
-        && let Some(cached) = c.load()
-    {
-        let fn_count = cached.nodes.len();
-        let edge_count: usize = cached.callees.values().map(|s| s.len()).sum();
-        *graph.write().await = cached;
-        return Ok(json!({
-            "status": "cached",
-            "commit": c.commit_hash,
-            "functions": fn_count,
-            "call_edges": edge_count,
-        }));
-    }
+    let cache = Cache::open(path);
 
     let start = std::time::Instant::now();
-
-    // L1 miss: get file→blob_sha from git
-    let blob_map: Option<HashMap<PathBuf, String>> =
-        cache.as_ref().and_then(|_| Cache::ls_files(path));
 
     // Discover all .c/.h files
     let all_files: Vec<PathBuf> = WalkDir::new(path)
@@ -140,44 +119,37 @@ pub async fn index_project(
         .map(|e| e.into_path())
         .collect();
 
-    // Split: L2 hits (no file read) vs. files needing parse
+    let max_cache_entries = all_files.len() * (100 + cache_overhead_pct) / 100;
+
     let mut file_graphs: Vec<FileGraph> = Vec::new();
-    // (path, cache_key, source)
+    // (path, blake3_key, source)
     let mut to_parse: Vec<(PathBuf, String, String)> = Vec::new();
     let mut read_err = 0usize;
     let mut l2_hits = 0usize;
+    // blake3 key per file — stored in file_shas for annotation staleness checks
+    let mut file_keys: Vec<(PathBuf, String)> = Vec::new();
 
     for file_path in &all_files {
-        let blob_sha: Option<String> = blob_map.as_ref().and_then(|m| m.get(file_path)).cloned();
+        match std::fs::read(file_path) {
+            Ok(bytes) => {
+                let key = blake3::hash(&bytes).to_hex().to_string();
+                file_keys.push((file_path.clone(), key.clone()));
 
-        // Fast path: L2 hit by git blob SHA — no file read needed
-        if let (Some(sha), Some(c)) = (blob_sha.as_deref(), cache.as_ref())
-            && let Some(fg) = c.load_file_graph(sha)
-        {
-            file_graphs.push(fg);
-            l2_hits += 1;
-            continue;
-        }
-
-        // Read file content (needed for parse or content-hash L2 fallback)
-        match std::fs::read_to_string(file_path) {
-            Ok(src) => {
-                let no_blob_sha = blob_sha.is_none();
-                let key = blob_sha.unwrap_or_else(|| {
-                    // No git: use blake3 hash of content as cache key
-                    blake3::hash(src.as_bytes()).to_hex().to_string()
-                });
-
-                // Content-hash L2 check: covers both non-git repos and untracked files
-                if no_blob_sha
-                    && let Some(c) = cache.as_ref()
+                if let Some(ref c) = cache
                     && let Some(fg) = c.load_file_graph(&key)
                 {
                     file_graphs.push(fg);
                     l2_hits += 1;
                     continue;
                 }
-                to_parse.push((file_path.clone(), key, src));
+
+                match String::from_utf8(bytes) {
+                    Ok(src) => to_parse.push((file_path.clone(), key, src)),
+                    Err(_) => {
+                        tracing::warn!("non-UTF-8 file, skipping: {:?}", file_path);
+                        read_err += 1;
+                    }
+                }
             }
             Err(e) => {
                 tracing::warn!("read error {:?}: {e}", file_path);
@@ -204,7 +176,7 @@ pub async fn index_project(
     for (opt_fg, (_path, key, _src)) in parsed.into_iter().zip(to_parse.iter()) {
         match opt_fg {
             Some(fg) => {
-                if let Some(c) = cache.as_ref() {
+                if let Some(ref c) = cache {
                     c.save_file_graph(key, &fg);
                 }
                 file_graphs.push(fg);
@@ -218,9 +190,8 @@ pub async fn index_project(
 
     // Merge all FileGraphs → CodebaseGraph
     let mut merged = crate::graph::merge_file_graphs(file_graphs);
-    if let Some(ref bm) = blob_map {
-        merged.file_shas = bm.clone();
-    }
+    // Store blake3 keys so annotation/staleness checks can verify current file content
+    merged.file_shas = file_keys.into_iter().collect();
     let fn_count = merged.nodes.len();
     let edge_count: usize = merged.callees.values().map(|s| s.len()).sum();
 
@@ -235,18 +206,14 @@ pub async fn index_project(
         "index_project completed"
     );
 
-    // Only cache a complete graph
-    if files_err == 0
-        && let Some(c) = cache.as_ref()
-    {
-        c.save(&merged);
-    }
-
     *graph.write().await = merged;
+
+    if let Some(ref c) = cache {
+        c.evict_if_needed(max_cache_entries);
+    }
 
     Ok(json!({
         "status": "indexed",
-        "commit": cache.as_ref().map(|c| c.commit_hash.as_str()),
         "files_ok": files_ok,
         "files_err": files_err,
         "l2_hits": l2_hits,
@@ -269,4 +236,25 @@ fn parse_file_to_graph(path: &Path, src: &str) -> anyhow::Result<FileGraph> {
         globals: local.globals,
         macro_arg_candidates,
     })
+}
+
+/// Return `true` if any .c/.h file under `project_path` has been modified after `since`.
+/// Used to decide whether a re-index is needed.
+///
+/// `since` should be captured *before* the last index run started so that
+/// files modified during that run are still detected as stale.
+pub fn has_stale_files(project_path: &Path, since: std::time::SystemTime) -> bool {
+    WalkDir::new(project_path)
+        .into_iter()
+        .filter_map(|e| e.ok())
+        .filter(|e| {
+            let ext = e.path().extension().and_then(|x| x.to_str()).unwrap_or("");
+            ext == "c" || ext == "h"
+        })
+        .any(|e| {
+            std::fs::metadata(e.path())
+                .and_then(|m| m.modified())
+                .map(|mtime| mtime > since)
+                .unwrap_or(false)
+        })
 }
