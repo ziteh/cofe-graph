@@ -235,8 +235,10 @@ pub async fn index_project(
         "index_project completed"
     );
 
-    // Save L1 full-graph snapshot
-    if let Some(c) = cache.as_ref() {
+    // Only cache a complete graph
+    if files_err == 0
+        && let Some(c) = cache.as_ref()
+    {
         c.save(&merged);
     }
 

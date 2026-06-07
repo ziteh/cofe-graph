@@ -10,10 +10,7 @@ fn collect_leading_comment_prefix(dn: Node<'_>, src: &[u8]) -> Option<(String, u
     let mut comments: Vec<Node<'_>> = Vec::new();
     let mut current = dn;
 
-    loop {
-        let Some(prev) = current.prev_sibling() else {
-            break;
-        };
+    while let Some(prev) = current.prev_sibling() {
         if prev.kind() != "comment" {
             break;
         }
