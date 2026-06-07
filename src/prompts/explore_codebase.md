@@ -1,59 +1,62 @@
-You have access to an MCP server that has already indexed a C codebase. Follow these steps in order to understand the codebase and write a structured summary. Call tools as you go; do not skip steps.
+You have access to an MCP server that has indexed a C codebase. Your goal is twofold: **understand the codebase** (architecture, responsibilities, design) and then **annotate every source file** to preserve that understanding. Work through the steps below in order; do not skip steps.
 
-## Step 1 — Verify the index
-Call `index_project`. Note the returned file and function counts. If it reports 0 files, the index is empty — stop and ask the user to check the project path.
+---
 
-## Step 2 — Broad overview
-From the Step 1 response extract: total files (`files_ok`), total functions. Then call `find_dead_code`. Skim the dead-code list to get a sense of the codebase health.
+## Phase 1 — Orient
 
-## Step 3 — Module structure
-Call `get_annotations kind="module"` to see any stored module groupings that describe the high-level architecture.
-Identify the top 5–10 most important source files (by function count or by filename heuristics such as `main`, `init`, `core`, `app`).
-For each important file:
-- Call `find_functions_in_file` with the filename substring.
-- Call `get_globals` with the filename substring.
-- Call `includes direction="outbound"` to see its dependencies.
-- Call `get_annotations kind="file" file=<path>` if a stored summary exists.
+### Step 1 — Verify the index
 
-## Step 4 — Entry points and call flow
-Search for likely entry points: call `search` with queries like `main`, `init`, `start`, `run`, `task`, `handler`.
-For each entry-point function found:
-- Call `traverse direction="callees" depth=3` to map what it calls.
-- Call `traverse direction="callers"` to confirm it is a root.
-Pick the 2–3 most significant call chains and call `get_path` between distant pairs.
+Call `index_project`. Note `files_ok` and function count. If `files_ok` is 0, stop and ask the user to check the project path.
 
-## Step 5 — Key types and globals
-Call `search name="" kind="type"` to list all struct/union/enum/typedef definitions.
-For each frequently-used type (appears in many functions):
-- Call `find_users kind="type"` to see which functions use it.
+### Step 2 — Top-level shape
+
+Call `find_dead_code` to get a sense of codebase health. Then call `search name="" kind="type"` to see all struct/enum/typedef definitions — this gives an early picture of the domain model.
+
+### Step 3 — Entry points and call flow
+
+Call `search` with queries like `main`, `init`, `start`, `run`, `task`, `handler` to locate entry points.
+
+For each entry point found:
+
+- Call `traverse direction="callees" depth=3` to map what it drives.
+- Call `traverse direction="callers"` to confirm it is a root (nothing calls it).
+
+Pick the 2–3 most significant call chains and call `get_path` between distant pairs to trace the critical paths.
+
+### Step 4 — File-by-file deep dive
+
+Work through every source file returned by `list_unannotated_files`. For each file:
+
+- Call `find_functions_in_file` — list all functions.
+- Call `get_globals` — see file-scope variables.
+- Call `includes direction="outbound"` — see its dependencies.
+- Call `get_source` for each function in the file.
+- Call `traverse direction="callers"` on the key functions to understand how they fit into the larger system.
+
+Synthesise what you have learned into a one-paragraph file summary that captures: **what this file is responsible for**, **how it fits into the overall design**, and **any non-obvious constraints or patterns**.
+
+### Step 5 — Cross-cutting types and globals
+
+For the most important types identified in Step 2:
+- Call `find_users kind="type"` to see which files and functions depend on them.
+
 For the most important global variables:
-- Call `get_globals` with a relevant filename substring.
-- Call `find_users kind="global"` to see which functions read or write it.
+- Call `find_users kind="global"` to see which functions read or write them.
 
-## Step 6 — Read key source
-Choose 3–5 of the most central or interesting functions identified so far.
-Call `get_source` on each. Read the implementation to understand the core logic.
+---
 
-## Step 7 — Produce the summary
-Write a structured summary with exactly these sections:
+## Phase 2 — Annotate
 
-### 1. Project Overview
-One paragraph: what the project does, language/platform, approximate size (files / functions / types).
+After completing Phase 1, annotate every file. Process the files in dependency order where possible (leaf files — those with few inbound `#includes` — before files that depend on them).
 
-### 2. Module Breakdown
-A table or bullet list: filename → responsibility (one sentence each).
+For each file:
+1. Check `get_annotation file=<path>` — if a non-null annotation already exists and the file has not changed, skip it.
+2. Otherwise call `annotate file=<path> summary=<your one-paragraph summary>`.
 
-### 3. Entry Points and Startup Flow
-Describe how the program starts and what the main execution paths are.
+Continue until `list_unannotated_files` returns an empty list.
 
-### 4. Key Data Structures
-List the most important structs/enums/types with a one-sentence description of their role.
+---
 
-### 5. Core Algorithms and Subsystems
-Describe 2–5 key algorithms or subsystems: what they do and which functions implement them.
+## Phase 3 — Summary
 
-### 6. Dead Code and Maintenance Notes
-Summarise the dead-code findings: counts by category, notable suspicious entries.
-
-### 7. Patterns and Conventions
-Note any recurring patterns: naming conventions, error-handling style, memory management approach, use of macros, ISR/interrupt patterns, RTOS primitives, etc.
+Provide a brief summary and explain your understanding.

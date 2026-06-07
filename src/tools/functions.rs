@@ -3,7 +3,6 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use super::rel_file;
-use crate::annotations::AnnotationStore;
 use crate::graph::CodebaseGraph;
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
@@ -63,7 +62,6 @@ pub fn find_function(
 
 pub fn find_functions_in_file(
     graph: &CodebaseGraph,
-    store: &AnnotationStore,
     root: &std::path::Path,
     params: FindInFileParams,
 ) -> Result<Value, String> {
@@ -78,16 +76,12 @@ pub fn find_functions_in_file(
     results.sort_by(|a, b| a.file.cmp(&b.file).then(a.name.cmp(&b.name)));
     let mut by_file: serde_json::Map<String, Value> = serde_json::Map::new();
     for n in &results {
-        let sha = graph.file_shas.get(&n.file);
         let mut obj = serde_json::Map::new();
         obj.insert("name".into(), json!(n.name));
         obj.insert("line".into(), json!(n.line));
         obj.insert("static".into(), json!(n.is_static));
         if !n.conditions.is_empty() {
             obj.insert("conditions".into(), json!(n.conditions));
-        }
-        if let Some(ann) = sha.and_then(|s| store.get_symbol_annotation(s, &n.name)) {
-            obj.insert("annotation".into(), json!(ann));
         }
         by_file
             .entry(rel_file(root, &n.file))
@@ -101,22 +95,15 @@ pub fn find_functions_in_file(
 
 pub fn get_source(
     graph: &CodebaseGraph,
-    store: &AnnotationStore,
     root: &std::path::Path,
     params: GetSourceParams,
 ) -> Result<Value, String> {
     let GetSourceParams { name } = params;
     match graph.nodes.get(&name) {
         Some(n) => {
-            let annotation_line = graph
-                .file_shas
-                .get(&n.file)
-                .and_then(|sha| store.get_symbol_annotation(sha, &n.name))
-                .map(|ann| format!("// annotation: {ann}\n"))
-                .unwrap_or_default();
             let header = format!("// file: {}\n// line: {}", rel_file(root, &n.file), n.line);
             let src_code = format!(
-                "{header}\n{annotation_line}\n{}",
+                "{header}\n\n{}",
                 n.source.replace("\r\n", "\n").replace("\t", "    ")
             );
             Ok(json!(src_code))

@@ -1,4 +1,3 @@
-use cofe_graph::annotations::AnnotationStore;
 use cofe_graph::tools::functions::{
     FindFunctionParams, FindInFileParams, find_function, find_functions_in_file,
 };
@@ -47,8 +46,7 @@ async fn test_find_functions_in_file() {
         filename: "module.c".to_string(),
     };
     // Single-file query: value is an object {file, functions:[...]}
-    let store = AnnotationStore::default();
-    let v = find_functions_in_file(&graph, &store, std::path::Path::new(""), params).unwrap();
+    let v = find_functions_in_file(&graph, std::path::Path::new(""), params).unwrap();
     let fns = v["module.c"].as_array().unwrap();
     assert_eq!(fns.len(), 3, "Should find helper, init, work");
 

@@ -16,10 +16,9 @@ A code graph RAG MCP server for embedded C. Inspired by [CodeGraph](https://gith
 | `get_globals`            | List file-scope global variable declarations in files                            |
 | `find_users`             | Find all functions referencing a global variable or type name                    |
 | `includes`               | Query `#include` relationships                                                   |
-| `annotate`               | Write an annotation for a file or symbol                                         |
-| `annotate_module`        | Define a logical module grouping across files                                    |
-| `get_annotations`        | Read annotations for a module, file, or symbol                                   |
-| `list_unannotated`       | List files, functions, or globals that have no annotation yet                    |
+| `annotate`               | Write a file-level annotation                                                    |
+| `get_annotation`         | Read the annotation for a file                                                   |
+| `list_unannotated_files` | List source files that have no annotation yet                                    |
 
 ## Usage
 

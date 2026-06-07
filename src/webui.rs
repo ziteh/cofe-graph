@@ -52,10 +52,8 @@ async fn source_handler(
     Query(params): Query<SourceQuery>,
 ) -> Json<serde_json::Value> {
     let graph = server.graph.read().await;
-    let store = server.annotation_store.read().await;
     let result = crate::tools::functions::get_source(
         &graph,
-        &store,
         &server.project_path,
         GetSourceParams { name: params.name },
     );

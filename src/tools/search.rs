@@ -3,7 +3,6 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use super::rel_file;
-use crate::annotations::AnnotationStore;
 use crate::graph::CodebaseGraph;
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
@@ -16,34 +15,20 @@ pub struct SearchParams {
     pub kind: Option<String>,
 }
 
-/// Sort items by name, then build their JSON representation and attach any stored annotation.
 fn format_results<'a, T>(
     mut items: Vec<&'a T>,
-    file_of: impl Fn(&'a T) -> &'a std::path::Path,
     name_of: impl Fn(&'a T) -> &'a str,
     to_obj: impl Fn(&'a T) -> serde_json::Map<String, Value>,
-    store: &AnnotationStore,
-    file_shas: &std::collections::HashMap<std::path::PathBuf, String>,
 ) -> Vec<Value> {
     items.sort_by(|a, b| name_of(a).cmp(name_of(b)));
     items
         .into_iter()
-        .map(|item| {
-            let mut obj = to_obj(item);
-            if let Some(ann) = file_shas
-                .get(file_of(item))
-                .and_then(|sha| store.get_symbol_annotation(sha, name_of(item)))
-            {
-                obj.insert("annotation".into(), json!(ann));
-            }
-            Value::Object(obj)
-        })
+        .map(|item| Value::Object(to_obj(item)))
         .collect()
 }
 
 pub fn search(
     graph: &CodebaseGraph,
-    store: &AnnotationStore,
     root: &std::path::Path,
     params: SearchParams,
 ) -> Result<Value, String> {
@@ -68,7 +53,6 @@ pub fn search(
     if do_functions {
         let values = format_results(
             graph.find_function(&name),
-            |n| n.file.as_path(),
             |n| n.name.as_str(),
             |n| {
                 let mut obj = serde_json::Map::new();
@@ -81,8 +65,6 @@ pub fn search(
                 }
                 obj
             },
-            store,
-            &graph.file_shas,
         );
         total += values.len();
         result.insert("functions".into(), json!(values));
@@ -91,7 +73,6 @@ pub fn search(
     if do_types {
         let values = format_results(
             graph.find_type(&name),
-            |t| t.file.as_path(),
             |t| t.name.as_str(),
             |t| {
                 let mut obj = serde_json::Map::new();
@@ -105,8 +86,6 @@ pub fn search(
                 }
                 obj
             },
-            store,
-            &graph.file_shas,
         );
         total += values.len();
         result.insert("types".into(), json!(values));
@@ -115,7 +94,6 @@ pub fn search(
     if do_symbols {
         let values = format_results(
             graph.find_symbol(&name),
-            |s| s.file.as_path(),
             |s| s.name.as_str(),
             |s| {
                 let mut obj = serde_json::Map::new();
@@ -129,8 +107,6 @@ pub fn search(
                 }
                 obj
             },
-            store,
-            &graph.file_shas,
         );
         total += values.len();
         result.insert("symbols".into(), json!(values));

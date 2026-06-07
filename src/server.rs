@@ -20,9 +20,7 @@ const EXPLORE_TEMPLATE: &str = include_str!("prompts/explore_codebase.md");
 
 use crate::annotations::AnnotationStore;
 use crate::graph::CodebaseGraph;
-use crate::tools::annotations::{
-    AnnotateModuleParams, AnnotateParams, GetAnnotationsParams, ListUnannotatedParams,
-};
+use crate::tools::annotations::{AnnotateParams, GetAnnotationParams, ListUnannotatedFilesParams};
 use crate::tools::functions::{FindInFileParams, GetSourceParams};
 use crate::tools::globals::FindUsersParams;
 use crate::tools::includes::IncludesParams;
@@ -118,7 +116,7 @@ impl GraphAnalyzer {
 impl GraphAnalyzer {
     #[prompt(
         name = "explore_codebase",
-        description = "Step-by-step instructions for an AI agent to explore an indexed C codebase with analysis tools and produce a structured summary."
+        description = "Step-by-step instructions for an AI agent to explore an indexed C codebase: understand its architecture, annotate every source file, then produce a structured summary."
     )]
     async fn explore_codebase(&self) -> Result<Vec<PromptMessage>, rmcp::ErrorData> {
         Ok(vec![PromptMessage::new_text(
@@ -152,10 +150,8 @@ impl GraphAnalyzer {
     async fn search(&self, params: Parameters<SearchParams>) -> CallToolResult {
         self.ensure_fresh().await;
         let Parameters(p) = params;
-        let store = self.annotation_store.read().await;
         self.call_result(crate::tools::search::search(
             &*self.graph.read().await,
-            &store,
             &self.project_path,
             p,
         ))
@@ -177,10 +173,8 @@ impl GraphAnalyzer {
     async fn get_source(&self, params: Parameters<GetSourceParams>) -> CallToolResult {
         self.ensure_fresh().await;
         let Parameters(p) = params;
-        let store = self.annotation_store.read().await;
         self.call_result(crate::tools::functions::get_source(
             &*self.graph.read().await,
-            &store,
             &self.project_path,
             p,
         ))
@@ -213,10 +207,8 @@ impl GraphAnalyzer {
     async fn find_functions_in_file(&self, params: Parameters<FindInFileParams>) -> CallToolResult {
         self.ensure_fresh().await;
         let Parameters(p) = params;
-        let store = self.annotation_store.read().await;
         self.call_result(crate::tools::functions::find_functions_in_file(
             &*self.graph.read().await,
-            &store,
             &self.project_path,
             p,
         ))
@@ -228,30 +220,15 @@ impl GraphAnalyzer {
     async fn get_globals(&self, params: Parameters<FindInFileParams>) -> CallToolResult {
         self.ensure_fresh().await;
         let Parameters(p) = params;
-        let store = self.annotation_store.read().await;
         self.call_result(crate::tools::globals::get_globals(
             &*self.graph.read().await,
-            &store,
             &self.project_path,
             p,
         ))
     }
 
     #[tool(
-        description = "Create or update a module annotation. A module is a logical grouping of files with a human-readable summary. Module annotations are not commit-aware and persist across commits."
-    )]
-    async fn annotate_module(&self, params: Parameters<AnnotateModuleParams>) -> CallToolResult {
-        let Parameters(p) = params;
-        let mut store = self.annotation_store.write().await;
-        self.call_result(crate::tools::annotations::annotate_module(
-            &mut store,
-            &self.project_path,
-            p,
-        ))
-    }
-
-    #[tool(
-        description = "Add or update a summary for a file or a specific symbol within a file. Omit `symbol` to annotate the file itself; include `symbol` to annotate a function, global variable, or #define. Annotations are keyed by git blob SHA and automatically disappear when the file changes on a different commit."
+        description = "Add or update a summary for a file. Annotations are keyed by content hash and automatically disappear when the file changes."
     )]
     async fn annotate(&self, params: Parameters<AnnotateParams>) -> CallToolResult {
         let Parameters(p) = params;
@@ -264,13 +241,13 @@ impl GraphAnalyzer {
     }
 
     #[tool(
-        description = "Read annotations. kind=\"module\": list all module annotations. kind=\"file\": get annotation for a single file (requires `file`). kind=\"symbol\": get annotation for a symbol in a file (requires `file` and `symbol`). Returns null annotation when none exists or when the file has changed since the annotation was written."
+        description = "Get the annotation for a file. Returns null when none exists or when the file has changed since the annotation was written."
     )]
-    async fn get_annotations(&self, params: Parameters<GetAnnotationsParams>) -> CallToolResult {
+    async fn get_annotation(&self, params: Parameters<GetAnnotationParams>) -> CallToolResult {
         self.ensure_fresh().await;
         let Parameters(p) = params;
         let store = self.annotation_store.read().await;
-        self.call_result(crate::tools::annotations::get_annotations(
+        self.call_result(crate::tools::annotations::get_annotation(
             &store,
             &*self.graph.read().await,
             &self.project_path,
@@ -279,13 +256,16 @@ impl GraphAnalyzer {
     }
 
     #[tool(
-        description = "List items that have no annotation in the current index snapshot. kind=\"file\": unannotated source files. kind=\"function\": unannotated functions. kind=\"global\": unannotated global variables. Optional `filename_filter` narrows results to files whose path contains the substring (case-insensitive)."
+        description = "List source files that have no annotation in the current index snapshot. Optional `filename_filter` narrows results to files whose path contains the substring (case-insensitive)."
     )]
-    async fn list_unannotated(&self, params: Parameters<ListUnannotatedParams>) -> CallToolResult {
+    async fn list_unannotated_files(
+        &self,
+        params: Parameters<ListUnannotatedFilesParams>,
+    ) -> CallToolResult {
         self.ensure_fresh().await;
         let Parameters(p) = params;
         let store = self.annotation_store.read().await;
-        self.call_result(crate::tools::annotations::list_unannotated(
+        self.call_result(crate::tools::annotations::list_unannotated_files(
             &store,
             &*self.graph.read().await,
             &self.project_path,

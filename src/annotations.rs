@@ -5,64 +5,32 @@ use serde::{Deserialize, Serialize};
 
 const ANNOT_DIR: &str = ".cofe-graph/annotations";
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ModuleAnnotation {
-    pub name: String,
-    pub summary: String,
-    pub files: Vec<String>,
-}
-
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct AnnotationStore {
-    pub modules: HashMap<String, ModuleAnnotation>,
-    /// key: git blob SHA → summary
+    // keyed by blake3 content hash of the file
     files: HashMap<String, String>,
-    /// key: "{blob_sha}::{symbol_name}" → summary
-    symbols: HashMap<String, String>,
 }
 
 impl AnnotationStore {
     pub fn load(base: &Path) -> Self {
         let dir = base.join(ANNOT_DIR);
-        let modules = read_json(&dir.join("modules.json")).unwrap_or_default();
         let files = read_json(&dir.join("files.json")).unwrap_or_default();
-        let symbols = read_json(&dir.join("symbols.json")).unwrap_or_default();
-        Self {
-            modules,
-            files,
-            symbols,
-        }
+        Self { files }
     }
 
     pub fn save(&self, base: &Path) -> Result<(), String> {
         let dir = base.join(ANNOT_DIR);
         std::fs::create_dir_all(&dir).map_err(|e| format!("cannot create annotations dir: {e}"))?;
-        write_json(&dir.join("modules.json"), &self.modules)?;
         write_json(&dir.join("files.json"), &self.files)?;
-        write_json(&dir.join("symbols.json"), &self.symbols)?;
         Ok(())
-    }
-
-    pub fn upsert_module(&mut self, m: ModuleAnnotation) {
-        self.modules.insert(m.name.clone(), m);
     }
 
     pub fn upsert_file(&mut self, sha: &str, summary: String) {
         self.files.insert(sha.to_string(), summary);
     }
 
-    pub fn upsert_symbol(&mut self, sha: &str, name: &str, summary: String) {
-        self.symbols.insert(format!("{sha}::{name}"), summary);
-    }
-
     pub fn get_file_annotation(&self, sha: &str) -> Option<&str> {
         self.files.get(sha).map(String::as_str)
-    }
-
-    pub fn get_symbol_annotation(&self, sha: &str, name: &str) -> Option<&str> {
-        self.symbols
-            .get(&format!("{sha}::{name}"))
-            .map(String::as_str)
     }
 }
 
