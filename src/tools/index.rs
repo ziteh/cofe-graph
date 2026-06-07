@@ -162,12 +162,14 @@ pub async fn index_project(
         // Read file content (needed for parse or content-hash L2 fallback)
         match std::fs::read_to_string(file_path) {
             Ok(src) => {
+                let no_blob_sha = blob_sha.is_none();
                 let key = blob_sha.unwrap_or_else(|| {
                     // No git: use blake3 hash of content as cache key
                     blake3::hash(src.as_bytes()).to_hex().to_string()
                 });
-                // Content-hash L2 check (non-git path)
-                if blob_map.is_none()
+
+                // Content-hash L2 check: covers both non-git repos and untracked files
+                if no_blob_sha
                     && let Some(c) = cache.as_ref()
                     && let Some(fg) = c.load_file_graph(&key)
                 {
