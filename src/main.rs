@@ -8,6 +8,8 @@ const DEFAULT_CACHE_OVERHEAD_PCT: usize = 25;
 
 struct Args {
     path: PathBuf,
+    subcommand: String,
+    subcommand_args: Vec<String>,
     use_toon: bool,
     quiet: bool,
     cache_overhead_pct: usize,
@@ -38,12 +40,14 @@ fn parse_args() -> Result<Args> {
         })
         .unwrap_or(DEFAULT_CACHE_OVERHEAD_PCT);
 
+    let mut positional = args.iter().filter(|a| !a.starts_with("--"));
+
     let path = PathBuf::from(
-        args.iter()
-            .find(|a| !a.starts_with("--"))
+        positional
+            .next()
             .unwrap_or_else(|| {
                 panic!(
-                    "usage: {} <project-path> [--toon] [--quiet] [--cache-overhead <PCT>]",
+                    "usage: {} <project-path> <subcommand> [args...]\nsubcommands: mcp, symbol-lookup, get-source, query-call-graph",
                     program_name
                 )
             }),
@@ -54,7 +58,24 @@ fn parse_args() -> Result<Args> {
         path.display()
     );
 
-    Ok(Args { path, use_toon, quiet, cache_overhead_pct })
+    let subcommand = positional
+        .next()
+        .unwrap_or_else(|| {
+            panic!(
+                "usage: {} <project-path> <subcommand> [args...]\nsubcommands: mcp, symbol-lookup, get-source, query-call-graph",
+                program_name
+            )
+        })
+        .clone();
+
+    let subcommand_args: Vec<String> = args
+        .iter()
+        .skip_while(|a| **a != subcommand)
+        .skip(1)
+        .cloned()
+        .collect();
+
+    Ok(Args { path, subcommand, subcommand_args, use_toon, quiet, cache_overhead_pct })
 }
 
 #[tokio::main]
@@ -62,17 +83,29 @@ async fn main() -> Result<()> {
     let args = parse_args()?;
 
     let log_dir = args.path.join(DATA_DIR_NAME).join("logs");
-    let _log_guard = cofe_graph::log::init(&log_dir, args.quiet);
 
-    tracing::info!(
-        project = %args.path.display(),
-        format = if args.use_toon { "toon" } else { "json" },
-        cache_overhead_pct = args.cache_overhead_pct,
-        "starting MCP server on stdio",
-    );
-    let server = GraphAnalyzer::new(args.path, args.use_toon, args.cache_overhead_pct);
-    let service = server.serve(rmcp::transport::stdio()).await?;
-    service.waiting().await?;
+    if args.subcommand == "mcp" {
+        let _log_guard = cofe_graph::log::init(&log_dir, args.quiet);
+        tracing::info!(
+            project = %args.path.display(),
+            format = if args.use_toon { "toon" } else { "json" },
+            cache_overhead_pct = args.cache_overhead_pct,
+            "starting MCP server on stdio",
+        );
+        let server = GraphAnalyzer::new(args.path, args.use_toon, args.cache_overhead_pct);
+        let service = server.serve(rmcp::transport::stdio()).await?;
+        service.waiting().await?;
+    } else {
+        let _log_guard = cofe_graph::log::init(&log_dir, true);
+        cofe_graph::cli::run(
+            args.path,
+            args.use_toon,
+            args.cache_overhead_pct,
+            &args.subcommand,
+            &args.subcommand_args,
+        )
+        .await?;
+    }
 
     Ok(())
 }
