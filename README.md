@@ -4,21 +4,11 @@ A code graph RAG MCP server for embedded C. Inspired by [CodeGraph](https://gith
 
 ## MCP Tools
 
-| Tool                     | Description                                                                      |
-| ------------------------ | -------------------------------------------------------------------------------- |
-| `index_project`          | Force re-index and return indexing statistics (auto-triggered on source changes) |
-| `search`                 | Find functions, types, and symbols by name                                       |
-| `traverse`               | BFS callers or callees of one or more functions                                  |
-| `get_source`             | Get the full source code of a function                                           |
-| `get_path`               | Find the call path from one function to another                                  |
-| `find_dead_code`         | List functions never called                                                      |
-| `find_functions_in_file` | List all functions in files                                                      |
-| `get_globals`            | List file-scope global variable declarations in files                            |
-| `find_users`             | Find all functions referencing a global variable or type name                    |
-| `includes`               | Query `#include` relationships                                                   |
-| `annotate`               | Write a file-level annotation                                                    |
-| `get_annotation`         | Read the annotation for a file                                                   |
-| `list_unannotated_files` | List source files that have no annotation yet                                    |
+- **`symbol_lookup`** — list all symbols in a file
+- **`get_source`** — return the full source of a symbol by name
+- **`query_call_graph`** — walk callers or callees of a function
+
+See [USAGE.md](USAGE.md) for agent usage guidance.
 
 ## Usage
 
@@ -30,7 +20,7 @@ A code graph RAG MCP server for embedded C. Inspired by [CodeGraph](https://gith
     "cofe-graph": {
       "type": "stdio",
       "command": "/path/to/cofe-graph",
-      "args": ["/path/to/codebase", "--toon"]
+      "args": ["/path/to/codebase", "mcp", "--toon"]
     }
   }
 }
@@ -40,7 +30,7 @@ A code graph RAG MCP server for embedded C. Inspired by [CodeGraph](https://gith
 
 | Flag                   | Description                                                                                      |
 | ---------------------- | ------------------------------------------------------------------------------------------------ |
-| `--toon`               | Responses with [TOON](https://toonformat.dev/) instead of JSON                                   |
+| `--toon`               | Encode responses with [TOON](https://toonformat.dev/) instead of JSON                            |
 | `--quiet`              | Suppress log output to stderr                                                                    |
 | `--cache-overhead <N>` | Extra cache slots as a percentage of the file count. E.g. `100` keeps two full branch snapshots. |
 
@@ -55,7 +45,7 @@ cargo build --release
 Manual testing with MCP Inspector:
 
 ```bash
-npx @modelcontextprotocol/inspector cargo run
+npx @modelcontextprotocol/inspector cargo run -- /path/to/codebase
 ```
 
 ## Benchmark
