@@ -1,5 +1,6 @@
 use anyhow::Result;
 use std::path::Path;
+use std::sync::OnceLock;
 use streaming_iterator::StreamingIterator;
 use tree_sitter::{Language, Node, Query, QueryCursor};
 
@@ -25,10 +26,35 @@ const ENUM_VALUE_QUERY: &str = r#"
   value: (_)? @value)
 "#;
 
+static DEFINE_QUERY_COMPILED: OnceLock<Query> = OnceLock::new();
+static MACRO_FN_QUERY_COMPILED: OnceLock<Query> = OnceLock::new();
+static ENUM_VALUE_QUERY_COMPILED: OnceLock<Query> = OnceLock::new();
+
+fn define_query() -> &'static Query {
+    DEFINE_QUERY_COMPILED.get_or_init(|| {
+        let language: Language = tree_sitter_c::LANGUAGE.into();
+        Query::new(&language, DEFINE_QUERY).expect("invalid query")
+    })
+}
+
+fn macro_fn_query() -> &'static Query {
+    MACRO_FN_QUERY_COMPILED.get_or_init(|| {
+        let language: Language = tree_sitter_c::LANGUAGE.into();
+        Query::new(&language, MACRO_FN_QUERY).expect("invalid query")
+    })
+}
+
+fn enum_value_query() -> &'static Query {
+    ENUM_VALUE_QUERY_COMPILED.get_or_init(|| {
+        let language: Language = tree_sitter_c::LANGUAGE.into();
+        Query::new(&language, ENUM_VALUE_QUERY).expect("invalid query")
+    })
+}
+
 pub fn parse_symbols(
     path: &Path,
     source: &str,
-    language: &Language,
+    _language: &Language,
     root: Node,
     graph: &mut CodebaseGraph,
 ) -> Result<()> {
@@ -36,11 +62,11 @@ pub fn parse_symbols(
 
     // Object-like #define
     {
-        let q = Query::new(language, DEFINE_QUERY)?;
+        let q = define_query();
         let name_idx = q.capture_index_for_name("name").unwrap();
         let val_idx = q.capture_index_for_name("value").unwrap();
         let mut cursor = QueryCursor::new();
-        let mut matches = cursor.matches(&q, root, src);
+        let mut matches = cursor.matches(q, root, src);
         while let Some(m) = matches.next() {
             if let Some(name) = cap_text(m, name_idx, src) {
                 let name_node = m
@@ -67,12 +93,12 @@ pub fn parse_symbols(
 
     // Function-like #define FOO(x) ...
     {
-        let q = Query::new(language, MACRO_FN_QUERY)?;
+        let q = macro_fn_query();
         let name_idx = q.capture_index_for_name("name").unwrap();
         let params_idx = q.capture_index_for_name("params").unwrap();
         let val_idx = q.capture_index_for_name("value").unwrap();
         let mut cursor = QueryCursor::new();
-        let mut matches = cursor.matches(&q, root, src);
+        let mut matches = cursor.matches(q, root, src);
         while let Some(m) = matches.next() {
             if let Some(name) = cap_text(m, name_idx, src) {
                 let params = cap_text_opt(m, params_idx, src);
@@ -107,11 +133,11 @@ pub fn parse_symbols(
 
     // Enum values
     {
-        let q = Query::new(language, ENUM_VALUE_QUERY)?;
+        let q = enum_value_query();
         let name_idx = q.capture_index_for_name("name").unwrap();
         let val_idx = q.capture_index_for_name("value").unwrap();
         let mut cursor = QueryCursor::new();
-        let mut matches = cursor.matches(&q, root, src);
+        let mut matches = cursor.matches(q, root, src);
         while let Some(m) = matches.next() {
             if let Some(name) = cap_text(m, name_idx, src) {
                 let name_node = m

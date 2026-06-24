@@ -1,29 +1,13 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub enum DeadCodeKind {
-    /// Appears as an argument to a macro call (e.g. NRF_SDH_BLE_OBSERVER(..., my_handler, ...))
-    MacroRegistered,
-    /// Name matches common callback/handler naming conventions
-    CallbackByName,
-    /// Known entrypoint (main, etc.)
-    Entrypoint,
-    /// No evidence of use — genuinely suspicious
-    Suspicious,
-}
-
-impl DeadCodeKind {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            DeadCodeKind::MacroRegistered => "macro_registered",
-            DeadCodeKind::CallbackByName => "callback_by_name",
-            DeadCodeKind::Entrypoint => "entrypoint",
-            DeadCodeKind::Suspicious => "suspicious",
-        }
-    }
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct CallEdge {
+    pub name: String,
+    /// Line in the caller's file where the call expression appears
+    pub line: u32,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -83,7 +67,6 @@ impl TypeKind {
 pub struct TypeNode {
     pub name: String,
     pub kind: TypeKind,
-    /// Raw source of the full definition, trimmed to 500 chars
     pub definition: String,
     /// Preprocessor conditions wrapping this node
     #[serde(default)]
@@ -106,21 +89,12 @@ pub struct GlobalVar {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct IncludeEdge {
-    /// Raw path as written in source (e.g. "../config/sdk_config.h" or "nrf_sdh.h")
-    pub path: String,
-    /// true for <system.h>, false for "local.h"
-    pub is_system: bool,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SymbolNode {
     pub name: String,
     pub kind: SymbolKind,
     /// Preprocessor conditions wrapping this node
     #[serde(default)]
     pub conditions: Vec<String>,
-    /// The value/body text, trimmed to 200 chars
     pub value: Option<String>,
     pub file: PathBuf,
     pub line: u32,
@@ -128,14 +102,10 @@ pub struct SymbolNode {
 
 #[derive(Default, Serialize, Deserialize)]
 pub struct FileGraph {
-    pub nodes: HashMap<String, FunctionNode>,
-    /// Forward edges: caller → set of callees (all defined in this file)
-    pub callees: HashMap<String, HashSet<String>>,
+    pub nodes: HashMap<String, Vec<FunctionNode>>,
+    /// Forward edges: caller → callees with call site line numbers
+    pub callees: HashMap<String, Vec<CallEdge>>,
     pub symbols: HashMap<String, Vec<SymbolNode>>,
-    pub includes: HashMap<PathBuf, Vec<IncludeEdge>>,
     pub types: HashMap<String, Vec<TypeNode>>,
-    pub globals: HashMap<String, GlobalVar>,
-    /// Raw identifiers found in macro-argument positions within this file,
-    /// before filtering by known function names.
-    pub macro_arg_candidates: HashSet<String>,
+    pub globals: HashMap<String, Vec<GlobalVar>>,
 }

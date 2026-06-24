@@ -1,12 +1,8 @@
 mod functions;
 mod globals;
-mod includes;
-mod macro_refs;
 mod symbols;
 mod types;
 mod utils;
-
-pub use macro_refs::{collect_macro_arg_candidates, collect_macro_refs, scan_macro_refs};
 
 use anyhow::Result;
 use std::path::Path;
@@ -26,7 +22,6 @@ pub fn parse_file(path: &Path, source: &str, graph: &mut CodebaseGraph) -> Resul
 
     functions::parse_functions(path, source, &language, root, graph)?;
     symbols::parse_symbols(path, source, &language, root, graph)?;
-    includes::parse_includes(path, source, &language, root, graph)?;
     types::parse_types(path, source, &language, root, graph)?;
     globals::parse_globals(path, source, &language, root, graph)?;
 

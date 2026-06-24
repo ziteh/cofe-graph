@@ -1,5 +1,6 @@
 use anyhow::Result;
 use std::path::Path;
+use std::sync::OnceLock;
 use streaming_iterator::StreamingIterator;
 use tree_sitter::{Language, Node, Query, QueryCursor};
 
@@ -55,35 +56,55 @@ const CALL_EXPR_QUERY: &str = r#"
   function: (identifier) @callee)
 "#;
 
+static FN_DEF_QUERY: OnceLock<Query> = OnceLock::new();
+static CALL_EXPR_QUERY_COMPILED: OnceLock<Query> = OnceLock::new();
+
+fn fn_def_query() -> &'static Query {
+    FN_DEF_QUERY.get_or_init(|| {
+        let language: Language = tree_sitter_c::LANGUAGE.into();
+        Query::new(&language, FUNCTION_DEF_QUERY).expect("invalid query")
+    })
+}
+
+fn call_expr_query() -> &'static Query {
+    CALL_EXPR_QUERY_COMPILED.get_or_init(|| {
+        let language: Language = tree_sitter_c::LANGUAGE.into();
+        Query::new(&language, CALL_EXPR_QUERY).expect("invalid query")
+    })
+}
+
 pub fn parse_functions(
     path: &Path,
     source: &str,
-    language: &Language,
+    _language: &Language,
     root: Node,
     graph: &mut CodebaseGraph,
 ) -> Result<()> {
     let src = source.as_bytes();
-    let fn_query = Query::new(language, FUNCTION_DEF_QUERY)?;
+    let fn_query = fn_def_query();
     let name_idx = fn_query.capture_index_for_name("fn.name").unwrap();
     let def_idx = fn_query.capture_index_for_name("fn.def").unwrap();
-    let call_query = Query::new(language, CALL_EXPR_QUERY)?;
+    let call_query = call_expr_query();
     let callee_idx = call_query.capture_index_for_name("callee").unwrap();
 
     // Pass 1: extract function definitions
     {
         let mut cursor = QueryCursor::new();
-        let mut matches = cursor.matches(&fn_query, root, src);
+        let mut matches = cursor.matches(fn_query, root, src);
+
         while let Some(m) = matches.next() {
             let name_node = m
                 .captures
                 .iter()
                 .find(|c| c.index == name_idx)
                 .map(|c| c.node);
+
             let def_node = m
                 .captures
                 .iter()
                 .find(|c| c.index == def_idx)
                 .map(|c| c.node);
+
             if let (Some(nn), Some(dn)) = (name_node, def_node) {
                 let name = nn.utf8_text(src)?.to_string();
                 let (source_text, line) = match collect_leading_comment_prefix(dn, src) {
@@ -99,6 +120,7 @@ pub fn parse_functions(
                     child.kind() == "storage_class_specifier"
                         && child.utf8_text(src).ok() == Some("static")
                 });
+
                 graph.insert_node(FunctionNode {
                     name,
                     file: path.to_path_buf(),
@@ -114,7 +136,8 @@ pub fn parse_functions(
     // Pass 2: extract call edges per function body
     {
         let mut cursor = QueryCursor::new();
-        let mut matches = cursor.matches(&fn_query, root, src);
+        let mut matches = cursor.matches(fn_query, root, src);
+
         while let Some(m) = matches.next() {
             let name_node = m
                 .captures
@@ -126,16 +149,19 @@ pub fn parse_functions(
                 .iter()
                 .find(|c| c.index == def_idx)
                 .map(|c| c.node);
+
             if let (Some(nn), Some(dn)) = (name_node, def_node) {
                 let caller = nn.utf8_text(src)?.to_string();
                 let mut call_cursor = QueryCursor::new();
-                let mut calls = call_cursor.matches(&call_query, dn, src);
+                let mut calls = call_cursor.matches(call_query, dn, src);
+
                 while let Some(cm) = calls.next() {
                     for cap in cm.captures {
                         if cap.index == callee_idx {
                             let callee = cap.node.utf8_text(src)?.to_string();
+                            let line = cap.node.start_position().row as u32 + 1;
                             if callee != caller {
-                                graph.add_edge(&caller, &callee);
+                                graph.add_edge(&caller, &callee, line);
                             }
                         }
                     }

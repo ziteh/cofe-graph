@@ -1,5 +1,6 @@
 use anyhow::Result;
 use std::path::Path;
+use std::sync::OnceLock;
 use streaming_iterator::StreamingIterator;
 use tree_sitter::{Language, Node, Query, QueryCursor};
 
@@ -9,18 +10,27 @@ const GLOBAL_DECL_QUERY: &str = r#"
 (declaration) @decl
 "#;
 
+static GLOBAL_DECL_QUERY_COMPILED: OnceLock<Query> = OnceLock::new();
+
+fn global_decl_query() -> &'static Query {
+    GLOBAL_DECL_QUERY_COMPILED.get_or_init(|| {
+        let language: Language = tree_sitter_c::LANGUAGE.into();
+        Query::new(&language, GLOBAL_DECL_QUERY).expect("invalid query")
+    })
+}
+
 pub fn parse_globals(
     path: &Path,
     source: &str,
-    language: &Language,
+    _language: &Language,
     root: Node,
     graph: &mut CodebaseGraph,
 ) -> Result<()> {
     let src = source.as_bytes();
-    let q = Query::new(language, GLOBAL_DECL_QUERY)?;
+    let q = global_decl_query();
     let decl_idx = q.capture_index_for_name("decl").unwrap();
     let mut cursor = QueryCursor::new();
-    let mut matches = cursor.matches(&q, root, src);
+    let mut matches = cursor.matches(q, root, src);
 
     while let Some(m) = matches.next() {
         let decl_node = match m.captures.iter().find(|c| c.index == decl_idx) {
@@ -75,8 +85,6 @@ pub fn parse_globals(
     Ok(())
 }
 
-/// Extract variable name from a declaration node by finding the deepest
-/// `identifier` that is a declarator (not inside a type specifier).
 fn extract_var_name(decl: Node, src: &[u8]) -> Option<String> {
     for child in decl.children(&mut decl.walk()) {
         match child.kind() {

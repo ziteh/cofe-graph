@@ -5,7 +5,6 @@ use rmcp::ServiceExt;
 use std::path::PathBuf;
 
 const DEFAULT_CACHE_OVERHEAD_PCT: usize = 25;
-const DEFAULT_WEBUI_PORT: u16 = 5113;
 
 struct Args {
     path: PathBuf,
@@ -28,7 +27,6 @@ fn parse_args() -> Result<Args> {
     let args: Vec<String> = all_args.collect();
 
     let use_toon = args.contains(&"--toon".to_string());
-
     let quiet = args.contains(&"--quiet".to_string());
 
     let cache_overhead_pct = args
@@ -56,12 +54,7 @@ fn parse_args() -> Result<Args> {
         path.display()
     );
 
-    Ok(Args {
-        path,
-        use_toon,
-        quiet,
-        cache_overhead_pct,
-    })
+    Ok(Args { path, use_toon, quiet, cache_overhead_pct })
 }
 
 #[tokio::main]
@@ -71,15 +64,13 @@ async fn main() -> Result<()> {
     let log_dir = args.path.join(DATA_DIR_NAME).join("logs");
     let _log_guard = cofe_graph::log::init(&log_dir, args.quiet);
 
-    // Start server
     tracing::info!(
         project = %args.path.display(),
         format = if args.use_toon { "toon" } else { "json" },
         cache_overhead_pct = args.cache_overhead_pct,
-        "starting MCP server on stdio, and the web UI on http://localhost:{DEFAULT_WEBUI_PORT}",
+        "starting MCP server on stdio",
     );
     let server = GraphAnalyzer::new(args.path, args.use_toon, args.cache_overhead_pct);
-    tokio::spawn(cofe_graph::webui::start(server.clone(), DEFAULT_WEBUI_PORT));
     let service = server.serve(rmcp::transport::stdio()).await?;
     service.waiting().await?;
 

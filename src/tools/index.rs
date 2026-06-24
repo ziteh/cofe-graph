@@ -14,28 +14,23 @@ use crate::graph::{CodebaseGraph, FileGraph};
 fn parse_sources_into_graph(g: &mut CodebaseGraph, sources: &[(&Path, &str)]) -> (usize, usize) {
     let start = std::time::Instant::now();
 
-    // Phase 1: parse files in parallel into isolated local graphs
-    let phase1_start = std::time::Instant::now();
-    let results: Vec<(&Path, &str, anyhow::Result<CodebaseGraph>)> = sources
+    let results: Vec<(&Path, anyhow::Result<CodebaseGraph>)> = sources
         .par_iter()
         .map(|&(path, src)| {
             let mut local = CodebaseGraph::default();
             let res = crate::parser::parse_file(path, src, &mut local).map(|_| local);
-            (path, src, res)
+            (path, res)
         })
         .collect();
-    let phase1_elapsed = phase1_start.elapsed();
 
     let mut files_ok = 0usize;
     let mut files_err = 0usize;
-    let mut ok_sources: Vec<&str> = Vec::new();
 
-    for (path, src, res) in results {
+    for (path, res) in results {
         match res {
             Ok(local) => {
                 g.merge(local);
                 files_ok += 1;
-                ok_sources.push(src);
             }
             Err(e) => {
                 tracing::warn!("parse error {:?}: {e}", path);
@@ -44,31 +39,11 @@ fn parse_sources_into_graph(g: &mut CodebaseGraph, sources: &[(&Path, &str)]) ->
         }
     }
 
-    // Phase 2: scan macro refs in parallel (read-only on g.nodes)
-    let phase2_start = std::time::Instant::now();
-    let macro_refs: Vec<std::collections::HashSet<String>> = {
-        let nodes = &g.nodes;
-        ok_sources
-            .par_iter()
-            .filter_map(|src| {
-                crate::parser::collect_macro_refs(src, nodes)
-                    .map_err(|e| tracing::warn!("macro scan error: {e}"))
-                    .ok()
-            })
-            .collect()
-    };
-    let phase2_elapsed = phase2_start.elapsed();
-
-    g.macro_referenced.extend(macro_refs.into_iter().flatten());
-
-    let total_elapsed = start.elapsed();
     tracing::info!(
         files_ok,
         files_err,
-        functions = g.nodes.len(),
-        phase1_ms = phase1_elapsed.as_millis(),
-        phase2_ms = phase2_elapsed.as_millis(),
-        total_ms = total_elapsed.as_millis(),
+        functions = g.nodes.values().map(|v| v.len()).sum::<usize>(),
+        total_ms = start.elapsed().as_millis(),
         "parse_sources_into_graph completed"
     );
 
@@ -85,7 +60,7 @@ pub async fn index_sources(
 
     let (files_ok, files_err) = parse_sources_into_graph(&mut g, sources);
 
-    let fn_count = g.nodes.len();
+    let fn_count: usize = g.nodes.values().map(|v| v.len()).sum();
     let edge_count: usize = g.callees.values().map(|s| s.len()).sum();
 
     Ok(json!({
@@ -108,7 +83,6 @@ pub async fn index_project(
 
     let start = std::time::Instant::now();
 
-    // Discover all .c/.h files
     let all_files: Vec<PathBuf> = WalkDir::new(path)
         .into_iter()
         .filter_map(|e| e.ok())
@@ -122,18 +96,14 @@ pub async fn index_project(
     let max_cache_entries = all_files.len() * (100 + cache_overhead_pct) / 100;
 
     let mut file_graphs: Vec<FileGraph> = Vec::new();
-    // (path, blake3_key, source)
     let mut to_parse: Vec<(PathBuf, String, String)> = Vec::new();
     let mut read_err = 0usize;
     let mut l2_hits = 0usize;
-    // blake3 key per file — stored in file_shas for annotation staleness checks
-    let mut file_keys: Vec<(PathBuf, String)> = Vec::new();
 
     for file_path in &all_files {
         match std::fs::read(file_path) {
             Ok(bytes) => {
                 let key = blake3::hash(&bytes).to_hex().to_string();
-                file_keys.push((file_path.clone(), key.clone()));
 
                 if let Some(ref c) = cache
                     && let Some(fg) = c.load_file_graph(&key)
@@ -158,7 +128,6 @@ pub async fn index_project(
         }
     }
 
-    // Parse uncached files in parallel
     let phase1_start = std::time::Instant::now();
     let parsed: Vec<Option<FileGraph>> = to_parse
         .par_iter()
@@ -188,11 +157,8 @@ pub async fn index_project(
         }
     }
 
-    // Merge all FileGraphs → CodebaseGraph
-    let mut merged = crate::graph::merge_file_graphs(file_graphs);
-    // Store blake3 keys so annotation/staleness checks can verify current file content
-    merged.file_shas = file_keys.into_iter().collect();
-    let fn_count = merged.nodes.len();
+    let merged = crate::graph::merge_file_graphs(file_graphs);
+    let fn_count: usize = merged.nodes.values().map(|v| v.len()).sum();
     let edge_count: usize = merged.callees.values().map(|s| s.len()).sum();
 
     tracing::info!(
@@ -222,27 +188,19 @@ pub async fn index_project(
     }))
 }
 
-/// Parse a single source file into a file graph.
 fn parse_file_to_graph(path: &Path, src: &str) -> anyhow::Result<FileGraph> {
     let mut local = CodebaseGraph::default();
     crate::parser::parse_file(path, src, &mut local)?;
-    let macro_arg_candidates = crate::parser::collect_macro_arg_candidates(src).unwrap_or_default();
     Ok(FileGraph {
         nodes: local.nodes,
         callees: local.callees,
         symbols: local.symbols,
-        includes: local.includes,
         types: local.types,
         globals: local.globals,
-        macro_arg_candidates,
     })
 }
 
 /// Return `true` if any .c/.h file under `project_path` has been modified after `since`.
-/// Used to decide whether a re-index is needed.
-///
-/// `since` should be captured *before* the last index run started so that
-/// files modified during that run are still detected as stale.
 pub fn has_stale_files(project_path: &Path, since: std::time::SystemTime) -> bool {
     WalkDir::new(project_path)
         .into_iter()
