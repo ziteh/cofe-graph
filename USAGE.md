@@ -75,7 +75,23 @@ If the same function name exists in multiple files (e.g. `main` in both `app/` a
 { "ambiguous": true, "matches": [ { "name": "main", "file": "app/main.c", "signature": "..." }, ... ] }
 ```
 
-Provide `file` to resolve. Note: call edges are indexed by function name, so `callers`/`callees` lists reflect edges from all same-name definitions combined.
+Provide `file` to resolve.
+
+#### Accuracy with `--file`
+
+When `file` is provided and the function is unambiguous:
+
+- **`callees`** — scoped to that definition's call edges. Results are accurate.
+- **`callers`** of a `static` function — scoped to the same translation unit. Results are accurate.
+- **`callers`** of a non-`static` (extern) function — returns all callers across the entire codebase, regardless of `file`. This is expected: without full linking information it is impossible to know which definition each call site targets.
+
+#### What empty `"file": ""` means
+
+A result entry with an empty `file` is a preprocessor macro (`#define`), not a real C function. It has no source to look up and no call graph of its own — do not call `get_source` or `query_call_graph` on it.
+
+#### depth > 1 caveats
+
+At `depth=1` the results are reliable. At `depth>1`, when an intermediate callee is defined in multiple files, the traversal follows one of the definitions by heuristic (preferring the same file as the caller, falling back to the first indexed). Results may be less accurate for deeply nested calls involving same-name functions.
 
 ## When to use each tool
 
@@ -93,5 +109,6 @@ Provide `file` to resolve. Note: call edges are indexed by function name, so `ca
 - **Start with `symbol_lookup`** when exploring an unfamiliar file. It gives you line numbers and signatures without reading the whole file.
 - **Trust the results.** They come from a full AST parse — do not re-verify with grep.
 - **Use `file` to disambiguate**, not to search. `file` is a substring filter; if you know the exact path, pass a unique fragment like `"app/main"` rather than just `"main"`.
+- **Always provide `file` for `query_call_graph` when the function name is not globally unique.** Static functions with the same name exist in many files in embedded C codebases. Querying without `file` returns `ambiguous`; querying with the wrong `file` returns wrong edges.
 - **`get_source` before reading the file.** For a single function, `get_source` returns exactly the function body without loading the whole file into context.
 - **`depth=1` is almost always enough** for understanding direct dependencies. Use `depth=2` only when you need to see one more level of the chain.

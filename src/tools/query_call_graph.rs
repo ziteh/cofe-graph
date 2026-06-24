@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -62,46 +64,40 @@ pub fn query_call_graph(graph: &CodebaseGraph, params: QueryCallGraphParams) -> 
     let include_callees = params.direction == "callees" || params.direction == "both";
 
     if include_callers {
-        let entries = build_entries(graph, &params.name, depth, true);
+        let entries = build_entries(graph, node, depth, true);
         result["callers"] = json!(entries);
     }
 
     if include_callees {
-        let entries = build_entries(graph, &params.name, depth, false);
+        let entries = build_entries(graph, node, depth, false);
         result["callees"] = json!(entries);
     }
 
     result
 }
 
-fn build_entries(graph: &CodebaseGraph, name: &str, depth: usize, callers: bool) -> Vec<Value> {
-    if depth == 1 {
-        let map = if callers { &graph.callers } else { &graph.callees };
-        let edges = match map.get(name) {
-            Some(e) => e,
-            None => return vec![],
-        };
-
-        edges.iter().map(|edge| {
-            let file = graph.nodes.get(&edge.name)
-                .and_then(|v| v.first())
-                .map(|n| n.file.to_string_lossy().to_string())
-                .unwrap_or_default();
-            json!({ "name": edge.name, "file": file, "line": edge.line })
-        }).collect()
+fn build_entries(graph: &CodebaseGraph, node: &FunctionNode, depth: usize, is_callers: bool) -> Vec<Value> {
+    let entries: Vec<(String, PathBuf)> = if is_callers {
+        graph.get_callers_from(&node.name, &node.file, depth)
     } else {
-        let names = if callers {
-            graph.get_callers(name, depth)
+        graph.get_callees_from(&node.name, &node.file, depth)
+    };
+
+    entries.iter().map(|(name, file)| {
+        let line = if depth == 1 {
+            let map = if is_callers { &graph.callers } else { &graph.callees };
+            let search_file = if is_callers { file.as_path() } else { node.file.as_path() };
+            map.get(&node.name)
+                .and_then(|edges| edges.iter()
+                    .find(|e| e.name == *name && e.caller_file == search_file)
+                    .map(|e| e.line))
         } else {
-            graph.get_callees(name, depth)
+            None
         };
 
-        names.iter().map(|n| {
-            let file = graph.nodes.get(n.as_str())
-                .and_then(|v| v.first())
-                .map(|node| node.file.to_string_lossy().to_string())
-                .unwrap_or_default();
-            json!({ "name": n, "file": file })
-        }).collect()
-    }
+        match line {
+            Some(l) => json!({ "name": name, "file": file, "line": l }),
+            None    => json!({ "name": name, "file": file }),
+        }
+    }).collect()
 }

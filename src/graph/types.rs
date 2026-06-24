@@ -6,8 +6,8 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct CallEdge {
     pub name: String,
-    /// Line in the caller's file where the call expression appears
     pub line: u32,
+    pub caller_file: PathBuf,
 }
 
 #[derive(Serialize, Deserialize)]

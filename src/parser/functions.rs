@@ -161,7 +161,7 @@ pub fn parse_functions(
                             let callee = cap.node.utf8_text(src)?.to_string();
                             let line = cap.node.start_position().row as u32 + 1;
                             if callee != caller {
-                                graph.add_edge(&caller, &callee, line);
+                                graph.add_edge(&caller, &callee, line, path.to_path_buf());
                             }
                         }
                     }

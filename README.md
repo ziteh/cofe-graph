@@ -34,6 +34,7 @@ See [USAGE.md](USAGE.md) for agent usage guidance.
 | `--quiet`              | Suppress log output to stderr                                                                    |
 | `--cache-overhead <N>` | Extra cache slots as a percentage of the file count. E.g. `100` keeps two full branch snapshots. |
 
+
 ## Development
 
 Build:
@@ -79,3 +80,9 @@ uv run bench.py --model <model> --base-url <url>
 For OpenRouter, set `OPENROUTER_API_KEY` in `benchmark/.env` (copy from `benchmark/.env.example`).
 
 Results are saved to `benchmark/results/<timestamp>/`.
+
+## TODO
+
+- [ ] **Multiple call sites collapsed**: when the same caller calls the same callee more than once, only one call-site line number is reported at `depth=1`.
+- [ ] **depth > 1 traversal through same-name callees**: if an intermediate node has multiple definitions across files, the BFS follows one by heuristic (prefer same TU, fallback to first indexed). Results may drift for complex same-name chains.
+- [ ] **Callers of extern same-name functions**: if two files define an extern function with the same name (link error in practice, but may occur in partial codebases), callers cannot be scoped to a specific definition.
