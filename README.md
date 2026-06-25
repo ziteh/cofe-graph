@@ -34,7 +34,6 @@ See [USAGE.md](USAGE.md) for agent usage guidance.
 | `--quiet`              | Suppress log output to stderr                                                                    |
 | `--cache-overhead <N>` | Extra cache slots as a percentage of the file count. E.g. `100` keeps two full branch snapshots. |
 
-
 ## Development
 
 Build:

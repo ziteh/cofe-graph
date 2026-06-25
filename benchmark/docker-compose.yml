@@ -1,0 +1,56 @@
+services:
+  # Step 1 — build cofe-graph index (writes .cofe-graph/ into the codebase dir on the host)
+  preindex:
+    build:
+      context: ..
+      dockerfile: benchmark/Dockerfile.exp
+    volumes:
+      - type: bind
+        source: ../tests/flipperzero-firmware-dev/applications
+        target: /fw
+    command: cofe-graph /fw index
+
+  # Step 2a — experimental: pi + cofe-graph MCP
+  exp:
+    build:
+      context: ..
+      dockerfile: benchmark/Dockerfile.exp
+    volumes:
+      - type: bind
+        source: ../tests/flipperzero-firmware-dev/applications
+        target: /fw
+      - type: bind
+        source: ./results
+        target: /results
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      - PI_PROVIDER=${PI_PROVIDER:-ollama}
+      - PI_MODEL=${PI_MODEL:-qwen2.5-coder:7b}
+      - PI_BASE_URL=${PI_BASE_URL:-http://host.docker.internal:11434/v1}
+      - PI_API_KEY=${PI_API_KEY:-ollama}
+      - FW_PATH=/fw
+      - COFE_GRAPH_BIN=/usr/local/bin/cofe-graph
+
+  # Step 2b — control: pi only, built-in filesystem tools
+  ctrl:
+    build:
+      context: ..
+      dockerfile: benchmark/Dockerfile.ctrl
+    volumes:
+      - type: bind
+        source: ../tests/flipperzero-firmware-dev/applications
+        target: /fw
+        read_only: true
+      - type: bind
+        source: ./results
+        target: /results
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      - PI_PROVIDER=${PI_PROVIDER:-ollama}
+      - PI_MODEL=${PI_MODEL:-qwen2.5-coder:7b}
+      - PI_BASE_URL=${PI_BASE_URL:-http://host.docker.internal:11434/v1}
+      - PI_API_KEY=${PI_API_KEY:-ollama}

@@ -2,4 +2,4 @@
 name = "benchmark"
 version = "0.0.0"
 requires-python = ">=3.11"
-dependencies = ["openai>=1", "python-dotenv>=1", "matplotlib>=3"]
+dependencies = ["openai>=1", "python-dotenv>=1"]

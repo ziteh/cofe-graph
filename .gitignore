@@ -10,3 +10,10 @@ logs/
 Thumbs.db
 *:Zone.Identifier
 *.env
+
+# cofe-graph index written into test codebases
+.cofe-graph/
+
+# benchmark
+benchmark/results/
+benchmark/.mcp.json

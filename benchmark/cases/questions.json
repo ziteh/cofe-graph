@@ -1,0 +1,38 @@
+[
+  {
+    "id": "Q1",
+    "question": "List all functions that `archive_free` directly calls, in the order they first appear in the source. Give only unique function names, one per line.",
+    "rubric": [
+      {
+        "criterion": "Lists furi_assert, view_dispatcher_remove_view, widget_free, view_dispatcher_free, scene_manager_free, browser_free, furi_string_free, text_input_free, furi_record_close, free — all 10 in source order",
+        "points": 3
+      },
+      {
+        "criterion": "No incorrect functions listed (no hallucinations or functions from other sources)",
+        "points": 1
+      }
+    ]
+  },
+  {
+    "id": "Q2",
+    "question": "Which functions in the firmware directly call `scene_manager_handle_back_event`? List all function names, one per line.",
+    "rubric": [
+      {
+        "criterion": "Lists at least 7 distinct caller functions",
+        "points": 1
+      },
+      {
+        "criterion": "Includes archive_back_event_callback and gpio_app_back_event_callback",
+        "points": 1
+      },
+      {
+        "criterion": "Includes nfc_back_event_callback and infrared_back_event_callback",
+        "points": 1
+      },
+      {
+        "criterion": "Includes subghz_back_event_callback and u2f_app_back_event_callback",
+        "points": 1
+      }
+    ]
+  }
+]
